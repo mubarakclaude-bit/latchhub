@@ -9,11 +9,10 @@ THEME.apply();
 function viewHome(){
   const top=S.brands.filter(x=>!x.parent||!S.brands.some(y=>y.id===x.parent)),subs=S.brands.length-top.length;
   const n=(f)=>S.brands.reduce((a,b)=>a+f(b),0);
-  const stat=(v,l)=>`<div class="st"><b>${v}</b><span>${l}</span></div>`;
+  
   const card=x=>{const ks=S.brands.filter(y=>y.parent===x.id),hl=heroLogo(x),p=brandHex(x),ink=inkOn(p);
     return`<button class="hc" data-a="open" data-id="${x.id}" data-name="${esc((x.name+' '+ks.map(k=>k.name).join(' ')).toLowerCase())}"><span class="hc-top" style="background:${p};color:${ink}"><span class="hc-logo">${hl?`<img loading="lazy" src="${hsrc(hl)}" alt="">`:esc(x.name[0]||'?')}</span><span class="hc-arrow">→</span></span><span class="hc-body"><b>${esc(x.name)}</b><span class="muted">${x.logos.length} logos · ${x.colors.length} colours${(x.elements||[]).length?` · ${x.elements.length} elements`:''}</span><span class="dots">${x.colors.slice(0,8).map(c=>`<i style="background:${c.hex}"></i>`).join('')}</span>${ks.length?`<span class="hc-sub">${ks.map(k=>esc(k.name)).join(' · ')}</span>`:''}</span></button>`};
-  return`<div class="home"><div class="hhead"><div><div class="eyebrow">Latch Infinity</div><h1>LatchHub</h1><p>Every client's brand assets in one place – colours, logos, fonts, elements and rules. Pick a client to start.</p></div><div class="row"><button class="btn pri" data-a="newBrand">＋ New brand</button><button class="btn" data-a="openCheck">Colour checker</button></div></div>
-  <div class="stats2">${stat(top.length,'Clients')}${stat(subs,'Sub-brands')}${stat(n(b=>b.logos.length),'Logos')}${stat(n(b=>b.colors.length),'Colours')}${stat(n(b=>(b.elements||[]).length),'Elements')}${stat(n(b=>b.book?1:0),'Brand books')}</div>
+  return`<div class="home"><div class="hhead"><div><div class="eyebrow">Latch Infinity</div><h1>LatchHub</h1><p>Every client's brand assets in one place – colours, logos, fonts, elements and rules. Pick a client to start.</p></div><div class="row"><button class="btn pri" data-a="newBrand">＋ New brand</button><button class="btn" data-a="openCheck">Design Lens</button></div></div>
   <div class="hbar"><input type="text" id="hsearch" placeholder="Search clients…" autocomplete="off"><span class="muted" id="hcount">${top.length} clients</span></div>
   ${top.length?`<div class="hgrid">${top.map(card).join('')}</div>`:`<div class="none">No clients yet – add your first brand.</div>`}</div>`}
 /* ---------- icon generator ---------- */

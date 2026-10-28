@@ -90,6 +90,11 @@ h2{margin:0;font-size:28px;letter-spacing:-.04em}h3{margin:0 0 10px;font-size:15
 .field{display:grid;gap:4px;margin-bottom:14px;max-width:560px}.field small{color:var(--mute)}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .15s;z-index:50}.toast.on{opacity:1}
 details summary{cursor:pointer}
+.lcat{font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--mute);margin:16px 0 4px;font-weight:600}.chk .fix{color:var(--ink);opacity:.85;margin-top:2px}
+.score{font-size:22px;font-weight:700;letter-spacing:-.03em}.score small{font-size:11px;font-weight:500;color:var(--mute)}.score.s-pass{color:var(--pass)}.score.s-warn{color:var(--warn)}.score.s-fail{color:var(--fail)}
+.legend{display:flex;flex-wrap:wrap;gap:10px;padding:8px 10px;font-size:11px;color:var(--mute)}.legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}
+.lkgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}.lkw{position:relative}.lk{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);text-decoration:none;color:inherit;transition:border-color .12s}.lk:hover{border-color:var(--ink)}
+.lk-ico{width:36px;height:36px;border-radius:8px;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;font-size:15px;flex:none}.lk b{display:block;font-weight:600;line-height:1.25}.lk small{color:var(--mute);font-size:12px}.lk .go{margin-left:auto;color:var(--mute)}.lkw .del{position:absolute;top:6px;right:6px}
 .kgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
 .kid{display:flex;align-items:center;gap:14px;text-align:left;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel);cursor:pointer;width:100%;min-height:84px;transition:border-color .12s}.kid:hover{border-color:var(--ink)}
 .kth{width:56px;height:56px;border-radius:8px;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none}.kth img{max-width:100%;max-height:100%;padding:5px;object-fit:contain}
@@ -129,9 +134,10 @@ button.logo{border:0;background:none;cursor:pointer;color:inherit;text-align:lef
 <body>
 <div id="app"></div>
 <div class="toast" id="toast"></div>
-<script src="js/icons.js"></script>
-<script src="js/extra.js"></script>
-<script src="js/import.js"></script>
+<script src="js/icons.js?v=19"></script>
+<script src="js/extra.js?v=19"></script>
+<script src="js/import.js?v=19"></script>
+<script src="js/lens.js?v=19"></script>
 <script>
 /* ---------- helpers ---------- */
 const $=(s,r=document)=>r.querySelector(s);
@@ -335,7 +341,7 @@ async function fileToCanvases(file){
 }
 
 /* ================= APP STATE & UI ================= */
-const EDIT_ACTIONS=new Set(['addColor','editColor','delColor','addFont','delFont','renameLogo','delLogo','renameBrand','delEl']);
+const EDIT_ACTIONS=new Set(['delLink','addColor','editColor','delColor','addFont','delFont','renameLogo','delLogo','renameBrand','delEl']);
 const ui={view:'home',brandId:null,tab:'colors',edit:false,check:{brandId:null,results:[],busy:'',}};
 const brand=()=>S.brands.find(b=>b.id===ui.brandId);
 const newBrand=name=>({id:uid(),name,notes:'',colors:[],logos:[],fonts:[],rules:{tol:6,minLogo:4,requireLogo:true,neutrals:true,forbidden:'',notes:''}});
@@ -360,7 +366,7 @@ function render(){
    ${S.brands.filter(x=>!x.parent||!S.brands.some(y=>y.id===x.parent)).map(x=>{const ks=S.brands.filter(y=>y.parent===x.id);return navRow(x,ks.length)+(ks.length?`<div class="tree">${ks.map(k=>navRow(k)).join('')}</div>`:'')}).join('')}
    <button class="nav" data-a="newBrand"><span class="th" style="background:transparent;color:var(--brand);font-size:20px">＋</span><span class="nm">New brand</span></button>
    <div class="sec">Tools</div>
-   <button class="nav ${ui.view==='check'?'on':''}" data-a="openCheck"><span class="th" style="background:transparent;color:var(--ink)">◐</span><span><span class="nm">Colour checker</span><span class="muted" style="font-size:11px">beta</span></span></button>
+   <button class="nav ${ui.view==='check'?'on':''}" data-a="openCheck"><span class="th" style="background:transparent;color:var(--ink)">◎</span><span><span class="nm">Design Lens</span><span class="muted" style="font-size:11px">beta</span></span></button>
    <div class="sp"></div>
    <div class="seg tsw" title="Theme">${[['light','Light'],['auto','Auto'],['dark','Dark']].map(t=>`<button class="${THEME.get()===t[0]?'on':''}" data-a="theme" data-id="${t[0]}">${t[1]}</button>`).join('')}</div>
    <label class="chkl lock" style="margin:8px 10px"><input type="checkbox" data-c="edit" ${ui.edit?'checked':''}> Edit mode</label>
@@ -376,11 +382,11 @@ function viewBrand(b){
   const bg=p?p.hex:'#222',ink=p?inkOn(p.hex):'#fff',hl=heroLogo(b),par=S.brands.find(y=>y.id===b.parent),kids=S.brands.filter(y=>y.parent===b.id);
   return`<div class="hero" style="background:${bg};color:${ink}"><div><div class="eyebrow">${par?`<span data-a="open" data-id="${par.id}" style="cursor:pointer;text-decoration:underline">${esc(par.name)}</span> › Sub-brand`:(kids.length?'Parent brand':'Brand assets')}</div><h1>${esc(b.name)}</h1>${b.notes?`<p>${esc(b.notes)}</p>`:''}
    <div class="stats"><span>${b.colors.length} colours</span><span>${b.logos.length} logos</span><span>${b.fonts.length} fonts</span></div>
-   <div class="row"><button class="btn pri" data-a="checkThis">Check a creative</button>${ui.edit?`<button class="btn sm" data-a="renameBrand">Rename</button><button class="btn sm del" data-a="delBrand">Delete client</button>`:''}</div></div>
+   <div class="row"><button class="btn pri" data-a="checkThis">Analyse a creative</button>${ui.edit?`<button class="btn sm" data-a="renameBrand">Rename</button><button class="btn sm del" data-a="delBrand">Delete client</button>`:''}</div></div>
    ${hl?`<div class="hlogo"><img src="${hsrc(hl)}"></div>`:''}</div>
-   <div class="pills"><button class="pill" data-a="goto" data-id="s-colors">Colors</button><button class="pill" data-a="goto" data-id="s-logos">Logos</button><button class="pill" data-a="goto" data-id="s-fonts">Fonts</button>${b.rules.notes||ui.edit?`<button class="pill" data-a="goto" data-id="s-guide">Guidelines</button>`:''}${kids.length?`<button class="pill" data-a="goto" data-id="s-kids">Sub-brands</button>`:''}${(b.elements||[]).length?`<button class="pill" data-a="goto" data-id="s-elements">Elements</button>`:''}${b.book?`<button class="pill" data-a="goto" data-id="s-book">Brand book</button>`:''}</div>
+   <div class="pills"><button class="pill" data-a="goto" data-id="s-colors">Colors</button><button class="pill" data-a="goto" data-id="s-logos">Logos</button><button class="pill" data-a="goto" data-id="s-links">Links</button><button class="pill" data-a="goto" data-id="s-fonts">Fonts</button>${b.rules.notes||ui.edit?`<button class="pill" data-a="goto" data-id="s-guide">Guidelines</button>`:''}${kids.length?`<button class="pill" data-a="goto" data-id="s-kids">Sub-brands</button>`:''}${(b.elements||[]).length?`<button class="pill" data-a="goto" data-id="s-elements">Elements</button>`:''}${b.book?`<button class="pill" data-a="goto" data-id="s-book">Brand book</button>`:''}</div>
    ${kids.length?`<section id="s-kids" style="margin-top:10px"><div class="sh"><h3>Brands under ${esc(b.name)}<span class="hint">Each sub-brand has its own colours and logos</span></h3></div><div class="kgrid">${kids.map(k=>`<button class="kid" data-a="open" data-id="${k.id}"><span class="kth">${thumb(k)}</span><span class="kt"><b>${esc(k.name)}</b><span class="kmeta">${k.logos.length} logos · ${k.colors.length} colours</span><span class="dots">${k.colors.slice(0,6).map(c=>`<i style="background:${c.hex}"></i>`).join('')}</span></span><span class="karr">→</span></button>`).join('')}</div></section>`:''}
-   ${secColors(b)}${secLogos(b)}${secElements(b)}${secFonts(b)}${secGuide(b)}${secBook(b)}`}
+   ${secColors(b)}${secLogos(b)}${secLinks(b)}${secElements(b)}${secFonts(b)}${secGuide(b)}${secBook(b)}`}
 
 function colorTile(c,big){return`<div class="ct"><button class="cs ${big?'big':''}" style="--c:${c.hex};color:${inkOn(c.hex)}" data-a="cp" data-v="${c.hex}"><span class="cn">${esc(c.name)}</span><span class="chx">${c.hex}</span><span class="cta">Click to copy</span><span class="ok" style="color:${inkOn(c.hex)}">✓ Copied ${c.hex}</span></button>${ui.edit?`<div class="row" style="margin-top:6px"><button class="btn sm" data-a="editColor" data-id="${c.id}">Edit</button><button class="btn sm del" data-a="delColor" data-id="${c.id}">Delete</button></div>`:''}</div>`}
 function secColors(b){
@@ -389,6 +395,20 @@ function secColors(b){
   return`<section id="s-colors"><div class="sh"><h3>Colors<span class="hint">Click any colour to copy its HEX code</span></h3>${b.colors.length?`<div class="row"><button class="btn sm" data-a="copyAll">Copy all HEX</button><button class="btn sm" data-a="ase">Swatches (.ase)</button></div>`:''}</div>${form}
   ${b.colors.length?roles.map(r=>`<div class="grp">${esc(r)}</div><div class="cgrid ${r==='Primary'?'big':''}">${b.colors.filter(c=>c.role===r).map(c=>colorTile(c,r==='Primary')).join('')}</div>`).join(''):`<div class="none">No colours yet.</div>`}</section>`}
 
+const LINK_ICO={Photos:'▣',Videos:'▶',Folder:'▤',Document:'≡',Link:'↗'};
+function linkKind(title,url){const t=(title+' '+url).toLowerCase();if(/photo|image|pic|gallery|shoot|portrait/.test(t))return'Photos';if(/video|reel|film|footage|youtube|youtu\.be|vimeo|\.mp4|\.mov/.test(t))return'Videos';if(/docs\.google|\.pdf|\.docx?|notion|slides|sheet/.test(t))return'Document';if(/drive\.google|dropbox|wetransfer|onedrive|folder/.test(t))return'Folder';return'Link'}
+function secLinks(b){const ls=b.links||[];
+  return`<section id="s-links"><div class="sh"><h3>Files &amp; links<span class="hint">Large files – photos, videos, source folders – live in Drive; open them from here</span></h3><button class="btn sm" data-a="addLink">＋ Add link</button></div>
+  ${ls.length?`<div class="lkgrid">${ls.map(l=>{let host='';try{host=new URL(l.url).hostname.replace(/^www\./,'')}catch{}return`<div class="lkw"><a class="lk" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer"><span class="lk-ico">${LINK_ICO[l.kind]||'↗'}</span><span><b>${esc(l.title)}</b><small>${esc(l.kind)} · ${esc(host)}</small></span><span class="go">↗</span></a>${ui.edit?`<button class="btn sm del" data-a="delLink" data-id="${l.id}">Delete</button>`:''}</div>`}).join('')}</div>`:`<div class="none">No links yet – add the Drive folders for photos, videos and source files.</div>`}</section>`}
+function openLinkForm(bid){$('#modal')?.remove();const b=S.brands.find(x=>x.id===bid),m=document.createElement('div');m.id='modal';
+  m.innerHTML=`<div class="mp" style="width:min(520px,100%)"><div class="mh"><h2>Add link – ${esc(b.name)}</h2><button class="btn sm" data-m="close">✕ Close</button></div><div class="mb"><input type="text" id="lk-title" placeholder="Title (e.g. Campus photos 2026)"><input type="text" id="lk-url" placeholder="https://drive.google.com/…" style="margin-top:10px"><select id="lk-kind" style="margin-top:10px"><option value="">Type: detect automatically</option>${Object.keys(LINK_ICO).map(k=>`<option>${k}</option>`).join('')}</select><p class="muted" style="font-size:12px;margin:10px 0 0">Make sure the Drive sharing is set to the people who need it – LatchHub only stores the link.</p><div class="mf"><button class="btn" data-m="close">Cancel</button><button class="btn pri" data-m="save">Add link</button></div></div></div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click',e=>{const t=e.target.closest('[data-m]');if(e.target===m){m.remove();return}if(!t)return;
+    if(t.dataset.m==='close')m.remove();
+    else if(t.dataset.m==='save'){let url=$('#lk-url',m).value.trim(),title=$('#lk-title',m).value.trim();if(url&&!/^[a-z][a-z0-9+.-]*:/i.test(url)&&/\./.test(url))url='https://'+url;
+      if(!/^https?:\/\/[^\s]+\.[^\s]+/i.test(url)){toast('Enter a valid http(s) link');return}try{new URL(url)}catch{toast('Enter a valid link');return}
+      if(!title){title=new URL(url).hostname.replace(/^www\./,'')}b.edited=true;(b.links=b.links||[]).push({id:uid(),title,url,kind:$('#lk-kind',m).value||linkKind(title,url)});save();m.remove();render();toast('Link added');setTimeout(()=>document.getElementById('s-links')?.scrollIntoView(),50)}});
+  setTimeout(()=>$('#lk-title',m).focus(),50)}
 function logoCard(l){const f=fmtOf(l);return`<div class="lt"><div class="sq">${l.check||l.preview?`<img loading="lazy" src="${lsrc(l)}" alt="${esc(l.name)}">`:`<div class="file">${esc(f[0].label)}</div>`}</div><div class="lc"><b>${esc(l.name)}</b>${l.w&&l.preview?`<span class="muted">${Math.round(l.w)}×${Math.round(l.h)}</span>`:''}</div><div class="fmts">${f.map(x=>`<a class="fchip" href="${x.url}" download="${esc(x.filename||'')}" title="Download ${esc(x.label)}">${esc(x.label)}</a>`).join('')}</div>${ui.edit?`<div class="row" style="padding:0 12px 12px"><button class="btn sm" data-a="renameLogo" data-id="${l.id}">Rename</button><button class="btn sm del" data-a="delLogo" data-id="${l.id}">Delete</button></div>`:''}</div>`}
 function secLogos(b){
   const form=ui.edit?`<div class="form"><label class="btn pri" style="cursor:pointer">＋ Upload logo files<input type="file" id="lf" multiple hidden accept=".svg,.png,.jpg,.jpeg,.webp,.pdf,.ai,.eps,.psd,.zip"></label><span class="muted">Name files by use, e.g. "White – for dark backgrounds".</span></div>`:'';
@@ -417,33 +437,35 @@ function secGuide(b){
     const lines=r.notes.split('\n').map(x=>x.replace(/^[•\-\s]+/,'').trim()).filter(Boolean);
     return`<section id="s-guide"><div class="sh"><h3>Guidelines<span class="hint">Do's and don'ts for this client</span></h3></div><div class="rules">${lines.map(t=>{const no=/^(never|do not|don't|no |avoid|not )/i.test(t);return`<div class="rule ${no?'no':'yes'}"><i>${no?'✕':'✓'}</i><span>${esc(t)}</span></div>`}).join('')}</div></section>`}
   return`<section id="s-guide"><div class="sh"><h3>Guidelines</h3></div><textarea data-c="rule:notes" placeholder="One rule per line, e.g. Never place the logo on red.">${esc(r.notes||'')}</textarea>
-  <details style="margin-top:16px"><summary><b>Colour checker settings</b></summary><div style="padding-top:12px">
+  <details style="margin-top:16px"><summary><b>Design Lens settings</b></summary><div style="padding-top:12px">
   <div class="field"><label>Colour tolerance (ΔE): <input type="number" min="1" max="15" step="0.5" value="${r.tol}" data-c="rule:tol" style="width:80px"></label><small>How close a colour must be to count as the brand colour. 6 is a good start; compressed JPGs may need 8.</small></div>
+  <div class="field"><label>Logo clear space (× logo height): <input type="number" min="0" max="2" step="0.05" value="${r.clear!=null&&r.clear!==''?r.clear:0.4}" data-c="rule:clear" style="width:80px"></label><small>Space that must stay empty around the logo. KIS uses width ÷ 6; Kaynes ≈ 0.37.</small></div>
+  <div class="field"><label>Minimum logo width (% of creative width): <input type="number" min="0" max="80" step="0.5" value="${r.minLogo||0}" data-c="rule:minLogo" style="width:80px"></label></div>
   <div class="field"><label class="chkl"><input type="checkbox" data-c="rule:neutrals" ${r.neutrals!==false?'checked':''}> Allow white, black and greys even if not in palette</label></div>
   <div class="field"><label>Forbidden colours (HEX, comma separated)</label><input type="text" data-c="rule:forbidden" value="${esc(r.forbidden||'')}" placeholder="#FF0000, #00AEEF"></div></div></details></section>`}
 
 function viewCheck(){
   const c=ui.check;if(!c.brandId||!S.brands.find(x=>x.id===c.brandId))c.brandId=S.brands[0]?.id;
-  return`<h2>Colour checker <span class="badge b-info">beta</span></h2><div class="sub">Upload an exported creative and see whether it uses the client's brand colours. Runs in your browser — nothing is uploaded.</div>
-  <div class="row" style="margin-bottom:12px"><label>Client: <select data-c="checkBrand">${S.brands.map(x=>`<option value="${x.id}" ${x.id===c.brandId?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label></div>
+  return`<h2>Design Lens <span class="badge b-info">beta</span></h2><div class="sub">Upload a creative and LatchHub reads it like a senior designer – brand colours and their shades, logo and clear space, spacing, alignment, type hierarchy and style – then tells you how to fix it. Runs in your browser; nothing is uploaded.</div>
+  <div class="row" style="margin-bottom:12px"><label>Client: <select data-c="checkBrand">${S.brands.map(x=>`<option value="${x.id}" ${x.id===c.brandId?'selected':''}>${esc(x.parent?'↳ ':'')}${esc(x.name)}</option>`).join('')}</select></label></div>
   <div class="drop" id="drop" data-a="pick"><b>Drop creatives here</b> or click to choose<br><span style="font-size:12px">PNG, JPG, WEBP, MP4/MOV (5 frames sampled). From Figma / Photoshop / Illustrator: export as PNG or JPG first.</span><input type="file" id="cf" multiple hidden accept="image/*,video/*"></div>
   ${c.busy?`<p class="muted">⏳ ${esc(c.busy)}</p>`:''}
   ${c.results.map(resCard).join('')}
-  <p class="muted" style="font-size:12px;margin-top:22px"><b>How it works:</b> it finds the main colours in the creative and compares each with the brand palette (professional ΔE2000 colour distance). Reliable on flat/graphic designs; photos and gradients are judged more leniently. Logo and font checks will be added later.</p>`}
+  <p class="muted" style="font-size:12px;margin-top:22px"><b>What it knows:</b> brand palette incl. light tints (allowed) and darker shades (not allowed), logo variants, clear space, platform formats and safe zones (post, story, banner, print), 8-pt spacing, alignment axes, type hierarchy and leading, contrast, and current style families (minimal, bold type, gradient, dark mode, photo-led, bento, pastel, maximalist). <b>Limits:</b> it works from an exported image, so it cannot identify fonts; photo-led layouts are judged lightly. Treat the score as guidance.</p>`}
 function resCard(r){
-  const lab={pass:'PASS',warn:'REVIEW',fail:'FAIL'}[r.level];
-  return`<div class="card res"><div><img class="th" src="${r.thumb}"></div><div class="pad"><div class="row" style="justify-content:space-between"><b>${esc(r.label)}</b><span class="badge b-${r.level}">${lab}</span></div>
-  <div class="muted" style="font-size:12px">${r.w}×${r.h}px</div>
-  <ul class="chk">${r.items.map(i=>`<li><span class="badge b-${i.level}">${i.level.toUpperCase()}</span><div><b>${esc(i.title)}</b>${i.detail?`<small>${esc(i.detail)}</small>`:''}</div></li>`).join('')}</ul>
-  <div class="muted" style="font-size:12px">Dominant colours</div><div class="chips">${r.clusters.map(c=>`<span class="chip" title="${esc(c.note||'')}"><i style="background:${c.hex}"></i>${c.hex} · ${(c.pct*100).toFixed(0)}% · ${esc(c.status==='match'?'✓ '+c.note:c.status||'')}</span>`).join('')}</div></div></div>`}
+  const lab={pass:'PASS',warn:'REVIEW',fail:'FAIL'}[r.level],cats=[...new Set(r.items.map(i=>i.cat||'Colour'))];
+  return`<div class="card res"><div><img class="th" src="${r.thumb}"><div class="legend"><span><i style="background:#22c55e"></i>logo</span><span><i style="background:#ef4444"></i>issue</span><span><i style="background:#f59e0b"></i>alignment</span><span><i style="background:#6366f1"></i>content margin</span></div></div><div class="pad"><div class="row" style="justify-content:space-between"><b>${esc(r.label)}</b><span class="row"><span class="score s-${r.level}">${r.score??''}${r.score!=null?'<small>/100</small>':''}</span><span class="badge b-${r.level}">${lab}</span></span></div>
+  <div class="muted" style="font-size:12px">${r.w}×${r.h}px${r.fmt?' · '+esc(r.fmt):''}${r.style?' · '+esc(r.style):''}</div>
+  ${cats.map(cat=>`<div class="lcat">${esc(cat)}</div><ul class="chk">${r.items.filter(i=>(i.cat||'Colour')===cat).map(i=>`<li><span class="badge b-${i.level}">${i.level.toUpperCase()}</span><div><b>${esc(i.title)}</b>${i.detail?`<small>${esc(i.detail)}</small>`:''}${i.fix?`<small class="fix">→ ${esc(i.fix)}</small>`:''}</div></li>`).join('')}</ul>`).join('')}
+  <div class="lcat">Dominant colours</div><div class="chips">${r.clusters.map(c=>`<span class="chip" title="${esc(c.note||'')}"><i style="background:${c.hex}"></i>${c.hex} · ${(c.pct*100).toFixed(0)}% · ${esc(c.status==='match'?'✓ '+c.note:c.status==='tint'?'◐ '+c.note:c.status==='shade'?'✕ '+c.note:(c.note||c.status||''))}</span>`).join('')}</div></div></div>`}
 
 async function runCheck(files){
   const b=S.brands.find(x=>x.id===ui.check.brandId);if(!b)return;
   for(const f of files){
-    try{ui.check.busy='Checking '+f.name+'…';render();await tick();
+    try{ui.check.busy='Analysing '+f.name+'…';render();await tick();
       const cs=await fileToCanvases(f);
-      for(const {c,label} of cs){const r=await analyze(c,b,label);ui.check.results.unshift(r)}
-    }catch(e){ui.check.results.unshift({label:f.name,level:'warn',items:[{level:'warn',title:'Could not read file',detail:e.message}],clusters:[],thumb:'',w:0,h:0})}
+      for(const {c,label} of cs){const r=await lensAnalyze(c,b,label);ui.check.results.unshift(r)}
+    }catch(e){ui.check.results.unshift({label:f.name,level:'warn',items:[{cat:'Colour',level:'warn',title:'Could not read file',detail:e.message}],clusters:[],thumb:'',w:0,h:0})}
   }
   ui.check.busy='';render();
 }
@@ -478,6 +500,8 @@ document.addEventListener('click',async e=>{
   if(a==='home'){ui.view='home';ui.anim=true}
   else if(a==='theme'){THEME.set(id);render();return}
   else if(a==='newIcon'){openIconGen(b.id);return}
+  else if(a==='addLink'){openLinkForm(b.id);return}
+  else if(a==='delLink'){b.links=(b.links||[]).filter(x=>x.id!==id)}
   else if(a==='bookblob'){const f=await DB.get(b.book.blobKey);if(!f){toast('Brand book file not found in this browser');return}const u=URL.createObjectURL(f),el=document.createElement('a');el.href=u;el.download=b.book.filename;el.click();setTimeout(()=>URL.revokeObjectURL(u),4000);return}
   else if(a==='delEl'){b.elements=(b.elements||[]).filter(x=>x.id!==id)}
   else if(a==='open'){ui.view='brand';ui.brandId=id;ui.anim=true}
