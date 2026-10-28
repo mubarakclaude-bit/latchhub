@@ -90,6 +90,7 @@ h2{margin:0;font-size:28px;letter-spacing:-.04em}h3{margin:0 0 10px;font-size:15
 .field{display:grid;gap:4px;margin-bottom:14px;max-width:560px}.field small{color:var(--mute)}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .15s;z-index:50}.toast.on{opacity:1}
 details summary{cursor:pointer}
+.lsec{margin:22px 0 2px;padding-top:14px;border-top:1px solid var(--line);font-weight:650;font-size:14px}.lsec span{font-weight:400;font-size:12px;color:var(--mute);margin-left:6px}
 .lcat{font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--mute);margin:16px 0 4px;font-weight:600}.chk .fix{color:var(--ink);opacity:.85;margin-top:2px}
 .score{font-size:22px;font-weight:700;letter-spacing:-.03em}.score small{font-size:11px;font-weight:500;color:var(--mute)}.score.s-pass{color:var(--pass)}.score.s-warn{color:var(--warn)}.score.s-fail{color:var(--fail)}
 .legend{display:flex;flex-wrap:wrap;gap:10px;padding:8px 10px;font-size:11px;color:var(--mute)}.legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}
@@ -134,10 +135,10 @@ button.logo{border:0;background:none;cursor:pointer;color:inherit;text-align:lef
 <body>
 <div id="app"></div>
 <div class="toast" id="toast"></div>
-<script src="js/icons.js?v=19"></script>
-<script src="js/extra.js?v=19"></script>
-<script src="js/import.js?v=19"></script>
-<script src="js/lens.js?v=19"></script>
+<script src="js/icons.js?v=28"></script>
+<script src="js/extra.js?v=28"></script>
+<script src="js/import.js?v=28"></script>
+<script src="js/lens.js?v=28"></script>
 <script>
 /* ---------- helpers ---------- */
 const $=(s,r=document)=>r.querySelector(s);
@@ -456,7 +457,7 @@ function resCard(r){
   const lab={pass:'PASS',warn:'REVIEW',fail:'FAIL'}[r.level],cats=[...new Set(r.items.map(i=>i.cat||'Colour'))];
   return`<div class="card res"><div><img class="th" src="${r.thumb}"><div class="legend"><span><i style="background:#22c55e"></i>logo</span><span><i style="background:#ef4444"></i>issue</span><span><i style="background:#f59e0b"></i>alignment</span><span><i style="background:#6366f1"></i>content margin</span></div></div><div class="pad"><div class="row" style="justify-content:space-between"><b>${esc(r.label)}</b><span class="row"><span class="score s-${r.level}">${r.score??''}${r.score!=null?'<small>/100</small>':''}</span><span class="badge b-${r.level}">${lab}</span></span></div>
   <div class="muted" style="font-size:12px">${r.w}×${r.h}px${r.fmt?' · '+esc(r.fmt):''}${r.style?' · '+esc(r.style):''}</div>
-  ${cats.map(cat=>`<div class="lcat">${esc(cat)}</div><ul class="chk">${r.items.filter(i=>(i.cat||'Colour')===cat).map(i=>`<li><span class="badge b-${i.level}">${i.level.toUpperCase()}</span><div><b>${esc(i.title)}</b>${i.detail?`<small>${esc(i.detail)}</small>`:''}${i.fix?`<small class="fix">→ ${esc(i.fix)}</small>`:''}</div></li>`).join('')}</ul>`).join('')}
+  ${cats.map(cat=>`${cat==='Logo'?'<div class="lsec">Logo analysis <span>detection · placement · edge margin · clear space</span></div>':cat==='Spacing'?'<div class="lsec">Content analysis <span>spacing · alignment · typography · composition (logo excluded)</span></div>':''}<div class="lcat">${esc(cat)}</div><ul class="chk">${r.items.filter(i=>(i.cat||'Colour')===cat).map(i=>`<li><span class="badge b-${i.level}">${i.level.toUpperCase()}</span><div><b>${esc(i.title)}</b>${i.detail?`<small>${esc(i.detail)}</small>`:''}${i.fix?`<small class="fix">→ ${esc(i.fix)}</small>`:''}</div></li>`).join('')}</ul>`).join('')}
   <div class="lcat">Dominant colours</div><div class="chips">${r.clusters.map(c=>`<span class="chip" title="${esc(c.note||'')}"><i style="background:${c.hex}"></i>${c.hex} · ${(c.pct*100).toFixed(0)}% · ${esc(c.status==='match'?'✓ '+c.note:c.status==='tint'?'◐ '+c.note:c.status==='shade'?'✕ '+c.note:(c.note||c.status||''))}</span>`).join('')}</div></div></div>`}
 
 async function runCheck(files){

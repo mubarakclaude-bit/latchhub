@@ -101,13 +101,21 @@ function lensClearSpace(S,box,rules,items,marks){
   const pad=Math.max(lw,lh)*.07,{ink}=S;let minD=1e9,np=null,vx0=1e9,vy0=1e9,vx1=-1,vy1=-1;
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){if(!ink[y*W+x])continue;if(x>bx0-pad&&x<bx1+pad&&y>by0-pad&&y<by1+pad)continue;
     const dx=Math.max(bx0-x,x-bx1,0),dy=Math.max(by0-y,y-by1,0),dd=Math.max(dx,dy);if(dd<minD){minD=dd;np=[x,y]}if(dd<C){if(x<vx0)vx0=x;if(y<vy0)vy0=y;if(x>vx1)vx1=x;if(y>vy1)vy1=y}}
-  const edges=[['left',bx0],['top',by0],['right',W-bx1],['bottom',H-by1]].sort((a,b)=>a[1]-b[1])[0];
-  const tight=Math.min(minD,edges[1]),ratio=tight/C,zone={t:'rect',x:(bx0-C)/W,y:(by0-C)/H,w:(lw+2*C)/W,h:(lh+2*C)/H,c:ratio>=1?'#22c55e':'#ef4444',dash:1};marks.push(zone);
+  const short=Math.min(W,H),margins={left:bx0,top:by0,right:W-bx1,bottom:H-by1},ratio=minD/C;
+  const near=np&&minD<C*1.5,zone={t:'rect',x:(bx0-C)/W,y:(by0-C)/H,w:(lw+2*C)/W,h:(lh+2*C)/H,c:ratio>=1?'#22c55e':'#ef4444',dash:1};marks.push(zone);
   const side=np?(np[1]>by1?'below':np[1]<by0?'above':np[0]>bx1?'to the right of':'to the left of'):'';
-  if(ratio>=1)items.push({cat:'Logo',level:'pass',title:'Logo clear space respected',detail:'Nearest element is '+o(Math.min(minD,edges[1]))+' px away (needs '+o(C)+' px = '+(C/lh).toFixed(2)+' × logo height).'});
+  /* 1) clear space = empty room between the logo and OTHER content (the canvas edge is judged separately below) */
+  if(minD>=C)items.push({cat:'Logo',level:'pass',title:'Logo clear space respected',detail:(np?'Nearest other element is '+o(minD)+' px away':'Nothing else sits near the logo')+' – the brand needs '+o(C)+' px ('+(C/lh).toFixed(2)+' × logo height).'});
   else{if(vx1>=0)marks.push({t:'rect',x:vx0/W,y:vy0/H,w:(vx1-vx0)/W,h:(vy1-vy0)/H,c:'#ef4444'});
-    const edgeBad=edges[1]<minD&&edges[1]<C;
-    items.push({cat:'Logo',level:ratio>=.6?'warn':'fail',title:edgeBad?'Logo is too close to the '+edges[0]+' edge':'Logo clear space is violated',detail:edgeBad?'Only '+o(edges[1])+' px between the logo and the '+edges[0]+' edge; the brand needs '+o(C)+' px.':'Something sits '+o(minD)+' px '+side+' the logo; the clear zone needs '+o(C)+' px ('+(C/lh).toFixed(2)+' × logo height) on every side.',fix:edgeBad?'Move the logo inward by at least '+o(C-edges[1])+' px.':'Move that element ≥ '+o(C-minD)+' px away or reduce the logo – the dashed box on the preview shows the protected zone.'})}}
+    items.push({cat:'Logo',level:ratio>=.6?'warn':'fail',title:'Logo clear space is violated',detail:'Another element sits '+o(minD)+' px '+side+' the logo; the clear zone needs '+o(C)+' px ('+(C/lh).toFixed(2)+' × logo height) on every side.',fix:'Move that element at least '+o(C-minD)+' px away or reduce the logo – the dashed box on the preview shows the protected zone.'})}
+  /* 2) edge placement – logos usually sit on an edge/corner, so judge their margin to the canvas edge on its own */
+  const anch=Object.entries(margins).filter(([,v])=>v<short*.14).sort((a,b)=>a[1]-b[1]),need=Math.max(C*.5,short*.025);
+  if(anch.length){const m0=anch[0][1],names=anch.map(a=>a[0]),vals=anch.map(a=>o(a[1]));
+    if(m0<need)items.push({cat:'Logo',level:m0<need*.6?'fail':'warn',title:'Logo is too close to the '+anch[0][0]+' edge',detail:'Only '+o(m0)+' px between the logo and the '+anch[0][0]+' edge; keep at least '+o(need)+' px so it is not trimmed by platform cropping or print trim.',fix:'Move the logo inwards by '+o(need-m0)+' px or more.'});
+    else{let det='Logo is anchored to the '+names.join(' & ')+' edge'+(names.length>1?'s':'')+' with '+names.map((n,i)=>n+' '+vals[i]+' px').join(' · ')+' margins.';
+      if(anch.length>=2&&Math.abs(anch[0][1]-anch[1][1])>Math.max(anch[1][1]*.18,3)){items.push({cat:'Logo',level:'warn',title:'Logo edge margins are uneven',detail:det,fix:'Use the same margin on both edges – about '+px8((anch[0][1]+anch[1][1])/2,sc)+' px.'})}
+      else items.push({cat:'Logo',level:'pass',title:'Logo edge margin is healthy'+(anch.length>1?' and balanced':''),detail:det})}}
+  else items.push({cat:'Logo',level:'info',title:'Logo floats inside the layout',detail:'It is not anchored to an edge, so clear space to other content is what matters here.'})}
 /* ---------- design knowledge base ---------- */
 const LENS_KB={
   styles:[
@@ -204,7 +212,7 @@ async function lensAnalyze(canvas,brand,label){
   /* logo */
   const logos=lensLogoList(brand);let logoRes=null;
   if(logos.length){const imgs={};for(const l of logos){try{imgs[l.id]=await loadImg(l.data)}catch{}}
-    try{logoRes=await analyzeLogo2(canvas,logos,imgs,brand.rules||{},{complexBg:!S.flat})}catch(e){items.push({cat:'Logo',level:'info',title:'Logo detection failed',detail:e.message})}}
+    try{logoRes=await analyzeLogo2(canvas,logos,imgs,brand.rules||{},{complexBg:!S.flat,blob:async()=>{const bl=await blobLogo(canvas,logos,imgs);if(!bl||bl.score<.5)return null;const mn=+(brand.rules||{}).minLogo||0,small=mn&&bl.wPct<mn;return{level:small?'fail':'pass',title:small?'Logo too small':'Logo found',detail:'Recognised as "'+bl.L.name+'" by its colours and proportions, about '+Math.round(bl.box.w)+' px wide = '+bl.wPct.toFixed(1)+'% of the width'+(small?'. Brand rule: logo must be at least '+mn+'% of the width.':'.'),box:bl.box,boxOk:true,fuzzy:true}}})}catch(e){items.push({cat:'Logo',level:'info',title:'Logo detection failed',detail:e.message})}}
   else items.push({cat:'Logo',level:'info',title:'No logo files to look for',detail:'Add PNG/SVG logos to this client so the lens can check placement and clear space.'});
   if(logoRes){items.push({cat:'Logo',level:logoRes.level,title:logoRes.title,detail:logoRes.detail,fix:logoRes.level==='fail'||logoRes.level==='warn'?'Use the correct, unstretched logo from the Logos section.':''});
     if(logoRes.box){marks.push({t:'rect',x:logoRes.box.x/canvas.width,y:logoRes.box.y/canvas.height,w:logoRes.box.w/canvas.width,h:logoRes.box.h/canvas.height,c:logoRes.boxOk?'#22c55e':'#f59e0b'});
@@ -233,9 +241,10 @@ function renderTpl2(img,lw,lh,tw,asp=1){
     if(opaqueCorner){const o0=(pad*W+pad)*4;m=(Math.abs(d[o]-d[o0])+Math.abs(d[o+1]-d[o0+1])+Math.abs(d[o+2]-d[o0+2]))>90&&px>=pad&&px<pad+tw&&py>=pad&&py<pad+th}else m=d[o+3]>128;
     if(m){mask[i]=1;cnt++;mr+=d[o];mg+=d[o+1];mb+=d[o+2]}}
   if(cnt<6||cnt>W*H*.97)return null;
-  const step=Math.max(1,Math.ceil(Math.sqrt(W*H/420))),xs=[],ys=[],ts=[],gxs=[],gys=[],gt=[],cxs=[],cys=[],cr=[],cg=[],cb=[];let sT=0;
+  const step=Math.max(1,Math.ceil(Math.sqrt(W*H/420))),xs=[],ys=[],ts=[],gxs=[],gys=[],gt=[],cxs=[],cys=[],cr=[],cg=[],cb=[],sol=[];let sT=0;
   for(let y=0;y<H;y+=step)for(let xx=0;xx<W;xx+=step){const i=y*W+xx,o=i*4;xs.push(xx);ys.push(y);ts.push(mask[i]);sT+=mask[i];
-    if(mask[i]){gxs.push(xx);gys.push(y);gt.push((.299*d[o]+.587*d[o+1]+.114*d[o+2])/255);if(d[o+3]>200||opaqueCorner){cxs.push(xx);cys.push(y);cr.push(d[o]);cg.push(d[o+1]);cb.push(d[o+2])}}}
+    if(mask[i]){gxs.push(xx);gys.push(y);gt.push((.299*d[o]+.587*d[o+1]+.114*d[o+2])/255);if(d[o+3]>200||opaqueCorner){const solid=opaqueCorner||(xx>0&&xx<W-1&&y>0&&y<H-1&&d[o-4+3]>200&&d[o+4+3]>200&&d[o-W*4+3]>200&&d[o+W*4+3]>200);cxs.push(xx);cys.push(y);cr.push(d[o]);cg.push(d[o+1]);cb.push(d[o+2]);sol.push(solid?1:0)}}}
+  if(sol.reduce((a,b)=>a+b,0)>=25){for(let k=cxs.length-1;k>=0;k--)if(!sol[k]){cxs.splice(k,1);cys.splice(k,1);cr.splice(k,1);cg.splice(k,1);cb.splice(k,1)}}
   const n=xs.length;if(sT<3||sT>n-3)return null;
   const te=new Uint8Array(W*H),lumT=new Float32Array(W*H);for(let i=0;i<W*H;i++){const o=i*4;lumT[i]=(.299*d[o]+.587*d[o+1]+.114*d[o+2])*(d[o+3]/255)+(1-d[o+3]/255)*128}
   for(let y=0;y<H-1;y++)for(let xx=0;xx<W-1;xx++){const i=y*W+xx,o=i*4;if(Math.abs(lumT[i]-lumT[i+1])>38||Math.abs(lumT[i]-lumT[i+W])>38||Math.abs(d[o+3]-d[o+7])>90||Math.abs(d[o+3]-d[o+W*4+3])>90)te[i]=1}
@@ -274,19 +283,21 @@ async function analyzeLogo2(canvas,logos,imgs,rules,opts={}){
   const E=new Uint8Array(W*H),Ed=new Uint8Array(W*H);for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){const i=y*W+x;if(Math.abs(g[i+1]-g[i-1])+Math.abs(g[i+W]-g[i-W])>.16)E[i]=1}
   for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){if(E[y*W+x]){for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)Ed[(y+dy)*W+x+dx]=1}}
   const stdLim=opts.complexBg?1:.2,minLogo0=+rules.minLogo||0;
-  const sadFind=async(L,asp,step,top)=>{const img=imgs[L.id];if(!img)return null;const lw=L.w||img.naturalWidth||300,lh=L.h||img.naturalHeight||100,cs=[];
-    for(let tw=14;tw<=W*.92;tw=Math.round(tw*step)+(tw<20?1:0)){const t=renderTpl2(img,lw,lh,tw,asp);if(!t||t.W>W||t.H>H||t.cn<20)continue;const stride=Math.max(1,Math.round(tw/(asp===1?16:9))),m=matchSad(px,g,W,H,t,stride,0,W,0,H,ii,70);if(m.sad<70)cs.push({...m,tw,stride,t})}
-    await tickI();cs.sort((a,b)=>a.sad-b.sad);let fin=null;
-    for(const b of cs.slice(0,top)){for(const f of[1,.94,1.06,.88,1.12]){const tw=Math.round(b.tw*f),t=f===1?b.t:renderTpl2(img,lw,lh,tw,asp);if(!t||t.W>W||t.H>H||t.cn<20)continue;const cx=b.x+b.t.W/2-t.W/2,cy=b.y+b.t.H/2-t.H/2,r=b.stride+2,m=matchSad(px,g,W,H,t,1,Math.round(cx-r),Math.round(cx+r),Math.round(cy-r),Math.round(cy+r),ii,70);
+  const sadFind=async(L,asp,step,top)=>{const img=imgs[L.id];if(!img)return null;const lw=L.w||img.naturalWidth||300,lh=L.h||img.naturalHeight||100,cs=[],ncs=[];
+    for(let tw=Math.max(14,Math.round(W*.035));tw<=W*.92;tw=Math.round(tw*step)+(tw<20?1:0)){const t=renderTpl2(img,lw,lh,tw,asp);if(!t||t.W>W||t.H>H||t.cn<20)continue;const stride=Math.max(1,Math.round(tw/(asp===1?16:9))),m=matchSad(px,g,W,H,t,stride,0,W,0,H,ii,70);if(m.sad<70)cs.push({...m,tw,stride,t});
+      if(asp===1){const m2=matchTpl2(g,W,H,t,Math.max(1,Math.round(tw/14)),0,W,0,H,ii);if(m2.s>.3)ncs.push({x:m2.x,y:m2.y,tw,stride:Math.max(1,Math.round(tw/14)),t,ncc:m2.s,sad:sadAt(t,px,W,m2.x,m2.y)})}}
+    await tickI();cs.sort((a,b)=>(a.sad+40/Math.sqrt(a.t.cn))-(b.sad+40/Math.sqrt(b.t.cn)));ncs.sort((a,b)=>b.ncc-a.ncc);let fin=null;
+    for(const b of[...cs.slice(0,top),...ncs.slice(0,5)]){for(const f of[1,.94,1.06,.88,1.12]){const tw=Math.round(b.tw*f),t=f===1?b.t:renderTpl2(img,lw,lh,tw,asp);if(!t||t.W>W||t.H>H||t.cn<20)continue;const cx=b.x+b.t.W/2-t.W/2,cy=b.y+b.t.H/2-t.H/2,r=b.stride+2,m=matchSad(px,g,W,H,t,1,Math.round(cx-r),Math.round(cx+r),Math.round(cy-r),Math.round(cy+r),ii,70);
         if(m.sad>=70)continue;const rg=ringAt(t,g,W,m.x,m.y);if(rg.vis<.05||rg.std>stdLim)continue;if(!fin||m.sad<fin.sad)fin={sad:m.sad,x:m.x,y:m.y,t,tw}}}
     if(!fin)return null;let bst={sad:sadSoft(fin.t,px,W,H,fin.x,fin.y),x:fin.x,y:fin.y,t:fin.t};
     for(const f of[1,.97,1.03]){const tw=Math.round(fin.tw*f),t=f===1?fin.t:renderTpl2(img,lw,lh,tw,asp);if(!t||t.W>W||t.H>H||t.cn<20)continue;const cx=fin.x+fin.t.W/2-t.W/2,cy=fin.y+fin.t.H/2-t.H/2;
       for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const x=Math.round(cx)+dx,y=Math.round(cy)+dy;if(x<0||y<0||x+t.W>W||y+t.H>H)continue;const v=sadSoft(t,px,W,H,x,y);if(v<bst.sad)bst={sad:v,x,y,t}}}
     const rg=ringAt(bst.t,g,W,bst.x,bst.y);if(rg.vis<.15||rg.std>stdLim)return null;
     return{L,asp,sad:bst.sad,vis:rg.vis,box:{x:(bst.x+bst.t.pad)/sc,y:(bst.y+bst.t.pad)/sc,w:bst.t.tw/sc,h:bst.t.th/sc},wPct:bst.t.tw/W*100}};
-  const sadHits=[];for(const L of logos){const h=await sadFind(L,1,1.2,4);if(h)sadHits.push(h)}
-  const okHits=sadHits.filter(h=>h.sad<=22),minSad=Math.min(...okHits.map(h=>h.sad)),sadOk=okHits.filter(h=>h.sad<=minSad+8).sort((a,b)=>b.box.w*b.box.h-a.box.w*a.box.h)[0];
+  const sadHits=[];for(const L of logos){const h=await sadFind(L,1,1.2,6);if(h)sadHits.push(h)}
+  const okHits=sadHits.filter(h=>h.sad<=26),minSad=Math.min(...okHits.map(h=>h.sad)),sadOk=okHits.filter(h=>h.sad<=minSad+8).sort((a,b)=>b.box.w*b.box.h-a.box.w*a.box.h)[0];
   if(sadOk){let lvl='pass',det='Matched "'+sadOk.L.name+'" (colour-exact), about '+Math.round(sadOk.box.w)+' px wide = '+sadOk.wPct.toFixed(1)+'% of the width.';if(minLogo0&&sadOk.wPct<minLogo0){lvl='fail';det+=' Brand rule: logo must be at least '+minLogo0+'% of the width.'}return{level:lvl,title:lvl==='pass'?'Logo found':'Logo too small',detail:det,box:sadOk.box,boxOk:true}}
+  if(opts.blob){const bl=await opts.blob();if(bl)return bl}
   const results=[];let bestComb=0;
   for(const L of logos.slice(0,4)){const img=imgs[L.id];if(!img)continue;const lw=L.w||img.naturalWidth||300,lh=L.h||img.naturalHeight||100,cands=[];
     for(let tw=14;tw<=W*.92;tw=Math.round(tw*1.22)+(tw<20?1:0)){const t=renderTpl2(img,lw,lh,tw);if(!t||t.W>W||t.H>H)continue;const stride=Math.max(1,Math.round(tw/14)),m=matchTpl2(g,W,H,t,stride,0,W,0,H,ii);cands.push({...m,tw,stride,t})}
@@ -297,12 +308,39 @@ async function analyzeLogo2(canvas,logos,imgs,rules,opts={}){
     if(!fin)continue;fin.s1=fin.s;
     const t=fin.t;let r=0,gg=0,b=0,c=0;for(let yy=0;yy<t.H;yy++)for(let xx=0;xx<t.W;xx++){if(!t.mask[yy*t.W+xx])continue;const o=((fin.y+yy)*W+fin.x+xx)*4;r+=px[o];gg+=px[o+1];b+=px[o+2];c++}
     results.push({L,ef:edgeF1(fin.t,Ed,E,W,H,fin.x,fin.y),s:fin.s,sb:fin.sb,vis:fin.vis,rstd:fin.rstd,s1:fin.s1,sad:fin.sad,comb:fin.comb,asp:fin.asp,distorted:fin.asp!==1&&fin.s-fin.s1>.03,found:rgbToHex(r/c,gg/c,b/c),want:rgbToHex(...t.mean),box:{x:(fin.x+t.pad)/sc,y:(fin.y+t.pad)/sc,w:t.tw/sc,h:t.th/sc},wPct:t.tw/W*100})}
-  const minLogo=+rules.minLogo||0,ok=results.filter(r=>!r.distorted&&r.s1>=.42&&r.sad<=42&&r.vis>=.05&&r.rstd<=stdLim&&r.ef>=.4&&r.wPct>=6).sort((a,b)=>b.comb-a.comb)[0];
-  if(ok){let lvl='pass',det='Matched "'+ok.L.name+'" (confidence '+Math.round(ok.s*100)+'%), about '+Math.round(ok.box.w)+' px wide = '+ok.wPct.toFixed(1)+'% of the width.';if(minLogo&&ok.wPct<minLogo){lvl='fail';det+=' Brand rule: logo must be at least '+minLogo+'% of the width.'}return{level:lvl,title:lvl==='pass'?'Logo found':'Logo too small',detail:det,box:ok.box,boxOk:true}}
+  const minLogo=+rules.minLogo||0;
   const dist=results.filter(r=>r.distorted&&r.s>=.55&&r.sad<=70&&r.vis>=.05&&r.rstd<=stdLim&&r.ef>=.45).sort((a,b)=>b.comb-a.comb)[0];
   if(dist)return{level:'fail',title:'Logo looks stretched or squashed',detail:'"'+dist.L.name+'" fits best when its height is ~'+Math.round(dist.asp*100)+'% of the correct proportion. Always scale the logo proportionally (hold Shift).',box:dist.box,boxOk:false};
   const wrong=results.filter(r=>Math.max(r.s,r.sb*.9)>=.7&&r.sad>42&&r.sad<=120&&r.vis>=.05&&r.rstd<=stdLim&&r.ef>=.45&&r.wPct>=6).sort((a,b)=>b.sb-a.sb)[0];
   if(wrong)return{level:'fail',title:'Logo shape found, but colour is wrong',detail:'Closest to "'+wrong.L.name+'", but its colour reads '+wrong.found+' instead of ~'+wrong.want+'. Looks recoloured or the wrong variant for this background.',box:wrong.box,boxOk:false};
-  const poss=results.filter(r=>r.s>=.45&&r.vis>=.05&&r.rstd<=stdLim&&r.ef>=.4&&r.wPct>=6).sort((a,b)=>b.s-a.s)[0];
-  if(poss)return{level:'warn',title:'Possible logo – please verify',detail:'Weak match with "'+poss.L.name+'" ('+Math.round(poss.s*100)+'%). Could be stretched, cropped, effects applied, or not the logo.',box:poss.box,boxOk:false};
+  const poss=results.filter(r=>r.s>=.6&&r.sad<=70&&r.vis>=.05&&r.rstd<=stdLim&&r.ef>=.5&&r.wPct>=6).sort((a,b)=>b.s-a.s)[0];
+  if(poss)return{level:'warn',title:'Logo-like shape found, but it does not match the approved logos',detail:'Something resembling "'+poss.L.name+'" is here, but its colours or proportions differ. It may be stretched, cropped, recoloured, a partner logo, or the wrong client logo.',box:poss.box,boxOk:false};
   return{level:rules.requireLogo===false?'info':'fail',title:'Logo not found',detail:'No approved logo variant detected. It may be missing, stretched/distorted, heavily cropped, or have effects (shadow, outline) applied.'}}
+/* ---------- logo detection v3: colour signature + proportions (robust to blur, JPEG and thin strokes) ---------- */
+function labelComps(m,W,H){const N=W*H,lab=new Int32Array(N),st=new Int32Array(N),out=[];let n=0;
+  for(let i=0;i<N;i++){if(!m[i]||lab[i])continue;n++;let sp=0;st[sp++]=i;lab[i]=n;const c={id:n,pix:[]};
+    while(sp){const p=st[--sp],px=p%W;c.pix.push(p);for(const q of[p-1,p+1,p-W,p+W]){if(q<0||q>=N||(q===p-1&&px===0)||(q===p+1&&px===W-1))continue;if(m[q]&&!lab[q]){lab[q]=n;st[sp++]=q}}}
+    out.push(c)}return out}
+function logoSignature(img){
+  if(img.__sig)return img.__sig;const k=Math.min(1,220/Math.max(img.naturalWidth,img.naturalHeight)),w=Math.max(8,Math.round(img.naturalWidth*k)),h=Math.max(8,Math.round(img.naturalHeight*k)),c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(img,0,0,w,h);
+  const d=x.getImageData(0,0,w,h).data,map=new Map();let tot=0,x0=w,y0=h,x1=0,y1=0,chromN=0;
+  for(let i=0;i<w*h;i++){const o=i*4;if(d[o+3]<200)continue;tot++;const key=(d[o]>>4)<<8|(d[o+1]>>4)<<4|(d[o+2]>>4);let b=map.get(key);if(!b){b={n:0,r:0,g:0,b:0};map.set(key,b)}b.n++;b.r+=d[o];b.g+=d[o+1];b.b+=d[o+2]}
+  const cl=[];[...map.values()].sort((a,b)=>b.n-a.n).forEach(b=>{const rgb=[b.r/b.n,b.g/b.n,b.b/b.n],lab=rgb2lab(...rgb),h=cl.find(o=>dE(o.lab,lab)<12);if(h)h.n+=b.n;else cl.push({n:b.n,rgb,lab})});
+  const keep=cl.filter(c=>c.n>=tot*.06&&Math.hypot(c.lab[1],c.lab[2])>16);const kn=keep.reduce((a,b)=>a+b.n,0);
+  if(!kn||kn<tot*.25){return img.__sig={chromatic:false}}
+  for(let i=0;i<w*h;i++){const o=i*4;if(d[o+3]<200)continue;const lab=rgb2lab(d[o],d[o+1],d[o+2]);if(keep.some(c=>dE(c.lab,lab)<16)){const px2=i%w,py=(i-px2)/w;if(px2<x0)x0=px2;if(px2>x1)x1=px2;if(py<y0)y0=py;if(py>y1)y1=py;chromN++}}
+  return img.__sig={chromatic:true,cols:keep.map(c=>({lab:c.lab,frac:c.n/kn})),aspect:(x1-x0+1)/(y1-y0+1),cover:chromN/((x1-x0+1)*(y1-y0+1))}}
+async function blobLogo(canvas,logos,imgs){
+  const sc=Math.min(1,640/Math.max(canvas.width,canvas.height)),W=Math.max(8,Math.round(canvas.width*sc)),H=Math.max(8,Math.round(canvas.height*sc)),c=document.createElement('canvas');c.width=W;c.height=H;
+  const x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,W,H);x.drawImage(canvas,0,0,W,H);const d=x.getImageData(0,0,W,H).data,N=W*H;let best=null;
+  for(const L of logos){const img=imgs[L.id];if(!img)continue;const sig=logoSignature(img);if(!sig.chromatic)continue;
+    const mask=new Uint8Array(N),idx=new Uint8Array(N);
+    for(let i=0;i<N;i++){const o=i*4,lab=lab5(d[o],d[o+1],d[o+2]);for(let k=0;k<sig.cols.length;k++){if(dE(lab,sig.cols[k].lab)<20){mask[i]=1;idx[i]=k+1;break}}}
+    const dm=dilate(mask,W,H,Math.max(3,Math.round(W*.03)),Math.max(2,Math.round(W*.012))),comps=labelComps(dm,W,H);
+    for(const cp of comps){let x0=W,y0=H,x1=0,y1=0,cnt=0;const per=new Array(sig.cols.length).fill(0);
+      for(const p of cp.pix){if(!mask[p])continue;const px=p%W,py=(p-px)/W;if(px<x0)x0=px;if(px>x1)x1=px;if(py<y0)y0=py;if(py>y1)y1=py;cnt++;per[idx[p]-1]++}
+      if(cnt<30)continue;const w=x1-x0+1,h=y1-y0+1,asp=w/h;if(w<W*.03||w>W*.9)continue;const r=asp/sig.aspect;if(r<.62||r>1.6)continue;
+      let l1=0;sig.cols.forEach((col,k)=>{l1+=Math.abs(per[k]/cnt-col.frac)});const comp=1-l1/2,dens=cnt/(w*h),dr=dens/sig.cover;
+      if(comp<.62||dr<.45||dr>2.2)continue;const score=comp*(1-Math.min(.4,Math.abs(Math.log(r))*.6))*(1-Math.min(.3,Math.abs(Math.log(dr))*.3));
+      if(!best||score>best.score)best={score,L,box:{x:x0/sc,y:y0/sc,w:w/sc,h:h/sc},wPct:w/W*100,comp}}}
+  return best}
