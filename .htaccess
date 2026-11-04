@@ -1,0 +1,4 @@
+Options -Indexes
+<FilesMatch "^(lh-config.*\.php|.*\.sql|\.env.*)$">
+  Require all denied
+</FilesMatch>

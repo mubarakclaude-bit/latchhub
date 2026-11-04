@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LatchHub admin</title>
+<style>
+:root{--bg:#0b0b0c;--panel:#141416;--line:#2a2a2e;--ink:#f2f2f3;--mute:#9a9aa2;--ok:#4ade80;--bad:#f87171}
+@media(prefers-color-scheme:light){:root{--bg:#f6f6f7;--panel:#fff;--line:#dcdce0;--ink:#16161a;--mute:#6b6b74;--ok:#15803d;--bad:#b91c1c}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,sans-serif}
+main{max-width:760px;margin:0 auto;padding:28px 16px 60px}h1{font-size:24px;margin:0 0 4px}h2{font-size:16px;margin:26px 0 8px}.sub{color:var(--mute);margin:0 0 18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:12px}
+input,select,button{font:inherit;padding:9px 11px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}button{cursor:pointer;background:var(--ink);color:var(--bg);border:0;font-weight:600}button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:500}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.row input{flex:1;min-width:150px}.mute{color:var(--mute)}.ok{color:var(--ok)}.bad{color:var(--bad)}
+table{width:100%;border-collapse:collapse}td{padding:8px 4px;border-top:1px solid var(--line);vertical-align:middle}.msg{min-height:20px;margin:8px 0}
+</style></head><body><main>
+<h1>LatchHub admin</h1><p class="sub">Sign in, check the Zoho connection and manage the team.</p>
+<div id="app"></div></main>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let csrf='',me=null;
+async function api(path,body){const o={credentials:'same-origin',headers:{}};if(body!==undefined){o.method='POST';o.headers['Content-Type']='application/json';o.headers['X-LH-CSRF']=csrf;o.body=JSON.stringify(body)}
+  const r=await fetch('api/'+path,o);let j={};try{j=await r.json()}catch{}if(!r.ok)throw Object.assign(new Error(j.error||('Error '+r.status)),{status:r.status});return j}
+async function boot(){try{const j=await api('me.php');me=j.user;csrf=j.csrf;home()}catch{login()}}
+function login(msg=''){$('#app').innerHTML=`<div class="card"><h2 style="margin-top:0">Sign in</h2><form id="f" class="row"><input id="e" type="email" placeholder="Email" required autocomplete="username"><input id="p" type="password" placeholder="Password" required autocomplete="current-password"><button>Sign in</button></form><div class="msg bad">${esc(msg)}</div></div>`;
+  $('#f').onsubmit=async ev=>{ev.preventDefault();try{const j=await api('login.php',{email:$('#e').value,password:$('#p').value});me=j.user;csrf=j.csrf;home()}catch(e){login(e.message)}}}
+async function home(){
+  if(me.role!=='admin'){$('#app').innerHTML=`<div class="card">Signed in as ${esc(me.name)} (designer). Only the admin can use this page.<p><button class="ghost" id="lo">Sign out</button></p></div>`;$('#lo').onclick=out;return}
+  $('#app').innerHTML=`<div class="row" style="justify-content:space-between"><span class="mute">Signed in as <b>${esc(me.name)}</b> (admin)</span><button class="ghost" id="lo">Sign out</button></div>
+  <h2>Zoho connection</h2><div class="card"><button id="hc">Run health check</button><div id="hr" class="msg"></div></div>
+  <h2>Team</h2><div class="card"><table id="tt"></table></div>
+  <h2>Add a person</h2><div class="card"><form id="nf" class="row"><input id="nn" placeholder="Name" required><input id="ne" type="email" placeholder="Email" required><select id="nr"><option value="designer">Designer</option><option value="admin">Admin</option></select><input id="np" type="password" placeholder="Password (10+ chars)" minlength="10" required><button>Add</button></form><div id="nm" class="msg"></div></div>`;
+  $('#lo').onclick=out;$('#hc').onclick=health;$('#nf').onsubmit=addUser;team()}
+async function out(){try{await api('logout.php',{})}catch{}me=null;login()}
+async function health(){$('#hr').textContent='Checking…';try{const j=await api('health.php');$('#hr').innerHTML=`<div class="${j.all_ok?'ok':'bad'}"><b>${j.all_ok?'Everything required is working.':'Something needs attention.'}</b></div><table>`+j.checks.map(c=>`<tr><td class="${c.ok?'ok':'bad'}">${c.ok?'✓':'✕'}</td><td>${esc(c.check)}</td><td class="mute">${esc(c.note)}</td></tr>`).join('')+`</table>`}catch(e){$('#hr').innerHTML=`<span class="bad">${esc(e.message)}</span>`}}
+async function team(){const j=await api('users.php');$('#tt').innerHTML=j.users.map(u=>`<tr><td><b>${esc(u.name)}</b><br><span class="mute">${esc(u.email)}</span></td><td>${esc(u.role)}</td><td class="${+u.active?'ok':'bad'}">${+u.active?'active':'off'}</td><td style="text-align:right"><button class="ghost" data-pw="${u.id}">New password</button> <button class="ghost" data-act="${u.id}" data-on="${+u.active?0:1}">${+u.active?'Switch off':'Switch on'}</button></td></tr>`).join('');
+  $('#tt').querySelectorAll('[data-pw]').forEach(b=>b.onclick=async()=>{const p=prompt('New password (10+ characters):');if(!p)return;try{await api('users.php',{action:'password',id:+b.dataset.pw,password:p});alert('Password changed.')}catch(e){alert(e.message)}});
+  $('#tt').querySelectorAll('[data-act]').forEach(b=>b.onclick=async()=>{try{await api('users.php',{action:'active',id:+b.dataset.act,active:+b.dataset.on});team()}catch(e){alert(e.message)}})}
+async function addUser(ev){ev.preventDefault();try{await api('users.php',{action:'create',name:$('#nn').value,email:$('#ne').value,role:$('#nr').value,password:$('#np').value});$('#nf').reset();$('#nm').innerHTML='<span class="ok">Added.</span>';team()}catch(e){$('#nm').innerHTML=`<span class="bad">${esc(e.message)}</span>`}}
+boot();
+</script></body></html>
