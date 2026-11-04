@@ -26,5 +26,6 @@ if ($path === '/workdrive/api/v1/upload' && $m === 'POST') {
   $id = 'NEWFILE' . (++$st['n']) . '0000'; $st['files'][$id] = ['name' => urldecode($_POST['filename'] ?? $f['name']), 'parent' => $_POST['parent_id'], 'folder' => false, 'data' => base64_encode(file_get_contents($f['tmp_name']))];
   $save(); $j(['data' => [['attributes' => ['resource_id' => $id, 'FileName' => $st['files'][$id]['name']]]]], 200);
 }
-if (preg_match('#^/v1/workdrive/download/([A-Za-z0-9]+)$#', $path, $mm) && $m === 'GET') { if (!isset($st['files'][$mm[1]])) $j([], 404); header('Content-Type: application/octet-stream'); echo base64_decode($st['files'][$mm[1]]['data'] ?? ''); exit; }
+if (preg_match('#^/v1/workdrive/download/([A-Za-z0-9]+)$#', $path, $mm) && $m === 'GET') { if (!isset($st['files'][$mm[1]])) $j([], 404); header('Location: http://localhost:' . $_SERVER['SERVER_PORT'] . '/storage/' . $mm[1], true, 302); exit; }
+if (preg_match('#^/storage/([A-Za-z0-9]+)$#', $path, $mm) && $m === 'GET') { if (!isset($st['files'][$mm[1]])) $j([], 404); header('Content-Type: application/octet-stream'); echo base64_decode($st['files'][$mm[1]]['data'] ?? ''); exit; }
 $j(['errors' => ['no such mock route', $path]], 404);

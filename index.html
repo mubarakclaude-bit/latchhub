@@ -583,7 +583,7 @@ function parseFonts(txt){return txt.split('\n').map(l=>l.split('|').map(x=>x.tri
 (async()=>{try{const s=await DB.get('state');if(s?.brands)S=s}catch{}
   /* signed in through the server: shared brands (srv: true = server has brands, false = server empty, null = local mode / unreachable) */
   let srv=null;
-  if(!DEMO&&typeof LHsync!=='undefined'&&LHsync.init()){try{srv=await LHsync.load()}catch(e){LHsync.on=false;toast('Server not reachable – showing your last saved copy')}}
+  if(!DEMO&&typeof LHsync!=='undefined'&&LHsync.init()){try{srv=await LHsync.load()}catch(e){LHsync.on=false;toast('Shared clients are unavailable ('+e.message+') – showing your last saved copy, nothing is being sent to Zoho',12000)}}
   S.brands.forEach(b=>b.fonts.forEach(f=>f.file&&registerFont(f)));
   if(DEMO&&!S.brands.length){loadDemo();return}
   if(!DEMO&&srv!==true){try{const r=await fetch('brand-hub-data.json?v='+Date.now());if(r.ok){const j=await r.json();if(!S.brands.length||(S.version||0)<(j.version||0)){const old=S.brands,keep=old.filter(b=>b.user),ue={};old.forEach(b=>{const u=(b.elements||[]).filter(e=>e.user);if(u.length)ue[b.name]=u});

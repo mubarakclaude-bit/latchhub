@@ -39,10 +39,16 @@ function pdo_connect(): PDO {
   return new PDO($d['dsn'] ?? ('mysql:host=' . $d['host'] . ';dbname=' . $d['name'] . ';charset=utf8mb4'), $d['user'] ?? null, $d['pass'] ?? null,
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
 }
+const LH_SCHEMA = 4;   /* bump when a table is added: installs created earlier are upgraded automatically on the next request */
+function ensure_schema_once(PDO $x): void {
+  try { $r = $x->query("SELECT v FROM lh_kv WHERE k='schema'")->fetch(); if ($r && (int)$r['v'] >= LH_SCHEMA) return; } catch (Throwable $e) { /* lh_kv itself may be missing */ }
+  ensure_schema($x);
+  $x->prepare('REPLACE INTO lh_kv (k,v,exp) VALUES (?,?,0)')->execute(['schema', (string)LH_SCHEMA]);
+}
 function db(): PDO {
   static $pdo = null;
   if ($pdo) return $pdo;
-  try { $pdo = pdo_connect(); }
+  try { $pdo = pdo_connect(); ensure_schema_once($pdo); }
   catch (Throwable $e) { error_log('LatchHub db: ' . $e->getMessage()); out(500, ['error' => 'Database connection failed.']); }
   return $pdo;
 }
@@ -50,8 +56,8 @@ function db(): PDO {
 function db_available(): bool { try { pdo_connect(); return true; } catch (Throwable $e) { error_log('LatchHub db: ' . $e->getMessage()); return false; } }
 function now(): string { return date('Y-m-d H:i:s'); }
 
-function ensure_schema(): void {
-  $x = db();
+function ensure_schema(?PDO $x = null): void {
+  $x = $x ?? db();
   $lite = $x->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';   /* sqlite is only used by the automated tests */
   $pk = $lite ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT AUTO_INCREMENT PRIMARY KEY';
   $tail = $lite ? '' : ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4';

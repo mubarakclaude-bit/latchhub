@@ -13,6 +13,7 @@ $ok('PDF compression (Ghostscript)', $gs !== '', $gs !== '' ? $gs : 'Not availab
 $lim = min(ini_bytes((string)ini_get('upload_max_filesize')), ini_bytes((string)ini_get('post_max_size')));
 $ok('Upload size limit (brand books need about 32M or more)', $lim >= 32 * 1048576, 'upload_max_filesize=' . ini_get('upload_max_filesize') . ', post_max_size=' . ini_get('post_max_size') . ($lim >= 32 * 1048576 ? '' : ' – too small: raise both to 64M in hPanel → PHP Configuration, otherwise brand books and big logos will not upload.'));
 try { db()->query('SELECT 1'); $ok('Database', true); } catch (Throwable $e) { $ok('Database', false, 'Connection failed'); }
+try { $nb = (int)db()->query('SELECT COUNT(*) c FROM lh_brands')->fetch()['c']; $ok('Shared clients table', true, $nb . ' client(s) saved on the server'); } catch (Throwable $e) { $ok('Shared clients table', false, 'Missing – clients are not shared between designers or sent to Zoho until this is fixed.'); }
 $z = cfg()['zoho'];
 $ok('Zoho settings present', !empty($z['client_id']) && !empty($z['client_secret']) && !empty($z['refresh_token']) && !empty($z['root_folder_id']));
 $t = zoho_token(true);

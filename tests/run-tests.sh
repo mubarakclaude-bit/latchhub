@@ -6,7 +6,7 @@ T=$(mktemp -d); SITE=$T/public_html; mkdir -p "$SITE"; cp -R "$ROOT/api" "$SITE/
 cat > "$T/lh-config.php" <<C
 <?php return ['db'=>['dsn'=>'sqlite:$T/t.db'],'zoho'=>['client_id'=>'cid','client_secret'=>'sec','refresh_token'=>'RT','root_folder_id'=>'ROOT000000001','accounts'=>'http://127.0.0.1:8901','api'=>'http://127.0.0.1:8901/workdrive/api/v1','download'=>'http://127.0.0.1:8901/v1/workdrive/download/'],'setup_token'=>'0123456789abcdef0123','max_upload_mb'=>50];
 C
-MOCK_STATE=$T/mock.json $PHP -d upload_max_filesize=64M -d post_max_size=64M -S 127.0.0.1:8901 "$ROOT/tests/mock_zoho.php" >/dev/null 2>&1 & P1=$!
+MOCK_STATE=$T/mock.json $PHP -d upload_max_filesize=64M -d post_max_size=64M -S 0.0.0.0:8901 "$ROOT/tests/mock_zoho.php" >/dev/null 2>&1 & P1=$!
 $PHP -d upload_max_filesize=64M -d post_max_size=64M -d memory_limit=1024M -S 127.0.0.1:8902 -t "$SITE" >/dev/null 2>&1 & P2=$!
 trap 'kill $P1 $P2 2>/dev/null; rm -rf "$T"' EXIT; sleep 1
 B=http://127.0.0.1:8902; J="$T/cj"; PASS=0; FAIL=0
@@ -74,6 +74,8 @@ ok "only one 'Brand assets' folder was created" 1 "$(curl -s -b "$J" "$B/api/fil
 ok "unknown sub-folder lists nothing (and is not created)" 0 "$(curl -s -b "$J" "$B/api/files.php?client=cli0001&path=Nope/Never" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["files"]))')"
 S3=$(curl -s -b "$J" "${H[@]}" -F client=cli0001 -F kind=asset -F "folder=../../etc" -F file=@"$T/logo.png" "$B/api/upload.php"); ok "'..' in a folder path cannot climb out" True "$(echo "$S3" | jget ok)"
 echo "shared brands"
+sqlite3 "$T/t.db" "DROP TABLE lh_brands; DELETE FROM lh_kv WHERE k='schema';" && ok "(simulated an older install without the shared-clients table)" 0 0
+ok "older install is upgraded automatically on the next request" 200 "$(curl -s -o /dev/null -w '%{http_code}' -b "$J" "$B/api/brands.php")"
 BR(){ curl -s -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d "$1" "$B/api/brands.php"; }
 ok "no brands yet" 0 "$(curl -s -b "$J" "$B/api/brands.php" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["brands"]))')"
 R1=$(BR '{"action":"save","base_version":0,"brand":{"id":"solid01","name":"Solid Semi","colors":[],"logos":[],"fonts":[],"rules":{}}}'); ok "create a brand" 1 "$(echo "$R1" | jget version)"

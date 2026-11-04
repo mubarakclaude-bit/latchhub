@@ -46,7 +46,7 @@ if ($cacheFile && is_file($cacheFile)) { $sendHeaders((int)filesize($cacheFile))
 $status = 0; $sent = false; $tee = null; $bytes = 0;
 if ($cacheDir && (is_dir($cacheDir) || @mkdir($cacheDir, 0700, true))) $tee = @fopen($cacheFile . '.part' . getmypid(), 'wb') ?: null;
 $ch = curl_init(rtrim(cfg()['zoho']['download'], '/') . '/' . rawurlencode($id));
-curl_setopt_array($ch, [CURLOPT_HTTPHEADER => ['Authorization: Zoho-oauthtoken ' . zoho_token()], CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 3, CURLOPT_CONNECTTIMEOUT => 15, CURLOPT_TIMEOUT => 0,
+curl_setopt_array($ch, [CURLOPT_HTTPHEADER => ['Authorization: Zoho-oauthtoken ' . zoho_token()], CURLOPT_FOLLOWLOCATION => true, CURLOPT_UNRESTRICTED_AUTH => true, CURLOPT_MAXREDIRS => 3, CURLOPT_CONNECTTIMEOUT => 15, CURLOPT_TIMEOUT => 0,
   CURLOPT_HEADERFUNCTION => function ($c, $h) use (&$status) { if (preg_match('#^HTTP/\S+\s+(\d+)#', $h, $m)) $status = (int)$m[1]; return strlen($h); },
   CURLOPT_WRITEFUNCTION => function ($c, $d) use (&$status, &$sent, &$tee, &$bytes, $sendHeaders) {
     if ($status !== 200) return strlen($d);
