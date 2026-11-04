@@ -1,4 +1,10 @@
 Options -Indexes
+DirectoryIndex index.php index.html
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  # the login gate is index.php – don't let people open the app file directly
+  RewriteRule ^index\.html$ index.php [L]
+</IfModule>
 <FilesMatch "^(lh-config.*\.php|.*\.sql|\.env.*|\.ftp-deploy.*)$">
   Require all denied
 </FilesMatch>

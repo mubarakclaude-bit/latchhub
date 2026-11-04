@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 const LH_SESSION_HOURS = 10;
 
+/* never print PHP errors to visitors; answer API calls with a clear JSON message instead */
+ini_set('display_errors', '0');
+set_exception_handler(function (Throwable $e) {
+  error_log('LatchHub: ' . $e->getMessage());
+  out(500, ['error' => 'Server error. If this is a new install, open the setup page first.']);
+});
+
 function out(int $code, array $data): void {
   http_response_code($code);
   header('Content-Type: application/json; charset=utf-8');
@@ -13,25 +20,34 @@ function out(int $code, array $data): void {
 }
 
 /* ---------- config (kept ABOVE the web root, never in git) ---------- */
+function cfg_path(): ?string {
+  $docroot = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/');
+  $paths = array_filter([$docroot ? dirname($docroot) . '/lh-config.php' : null, dirname(__DIR__, 2) . '/lh-config.php', dirname(__DIR__) . '/lh-config.php']);
+  foreach ($paths as $p) { if (is_file($p)) return $p; }
+  return null;
+}
 function cfg(): array {
   static $c = null;
   if ($c !== null) return $c;
-  $docroot = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/');
-  $paths = array_filter([$docroot ? dirname($docroot) . '/lh-config.php' : null, dirname(__DIR__, 2) . '/lh-config.php', dirname(__DIR__) . '/lh-config.php']);
-  foreach ($paths as $p) { if (is_file($p)) { $c = require $p; return $c; } }
-  out(500, ['error' => 'Server is not configured: lh-config.php was not found above the web root.']);
+  $p = cfg_path();
+  if (!$p) out(500, ['error' => 'Server is not configured: lh-config.php was not found above the web root.']);
+  $c = require $p;
+  return $c;
 }
-
+function pdo_connect(): PDO {
+  $d = cfg()['db'];
+  return new PDO($d['dsn'] ?? ('mysql:host=' . $d['host'] . ';dbname=' . $d['name'] . ';charset=utf8mb4'), $d['user'] ?? null, $d['pass'] ?? null,
+    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+}
 function db(): PDO {
   static $pdo = null;
   if ($pdo) return $pdo;
-  $d = cfg()['db'];
-  try {
-    $pdo = new PDO($d['dsn'] ?? ('mysql:host=' . $d['host'] . ';dbname=' . $d['name'] . ';charset=utf8mb4'), $d['user'] ?? null, $d['pass'] ?? null,
-      [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
-  } catch (Throwable $e) { error_log('LatchHub db: ' . $e->getMessage()); out(500, ['error' => 'Database connection failed.']); }
+  try { $pdo = pdo_connect(); }
+  catch (Throwable $e) { error_log('LatchHub db: ' . $e->getMessage()); out(500, ['error' => 'Database connection failed.']); }
   return $pdo;
 }
+/* used by the login page so it can show a friendly message instead of JSON */
+function db_available(): bool { try { pdo_connect(); return true; } catch (Throwable $e) { error_log('LatchHub db: ' . $e->getMessage()); return false; } }
 function now(): string { return date('Y-m-d H:i:s'); }
 
 function ensure_schema(): void {
