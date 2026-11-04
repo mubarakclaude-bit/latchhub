@@ -10,6 +10,10 @@ declare(strict_types=1);
 require __DIR__ . '/_lib.php';
 require_method('POST');
 $user = require_login(true);
+/* a file bigger than post_max_size arrives as an empty request – say so instead of a confusing 'missing client' */
+if (empty($_POST) && empty($_FILES) && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+  out(413, ['error' => 'The file is larger than this server allows (post_max_size=' . ini_get('post_max_size') . ', upload_max_filesize=' . ini_get('upload_max_filesize') . '). Raise both in hPanel → PHP Configuration (64M is a good value).']);
+}
 $cfg = cfg();
 $key = (string)($_POST['client'] ?? '');
 if (!valid_client_key($key)) out(400, ['error' => 'Missing or invalid client.']);
@@ -44,27 +48,11 @@ $bytes = (int)filesize($send);
 $folder = client_folder($key, (string)($_POST['client_name'] ?? $key), true);
 $subPath = trim((string)($_POST['folder'] ?? ''));
 if ($subPath !== '') $folder = ensure_path($folder, $subPath, true);
-$z = $cfg['zoho'];
-$resp = null;
-for ($try = 0; $try < 2 && !$resp; $try++) {
-  $ch = curl_init(rtrim($z['api'], '/') . '/upload');
-  curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 900, CURLOPT_CONNECTTIMEOUT => 15,
-    CURLOPT_HTTPHEADER => ['Authorization: Zoho-oauthtoken ' . zoho_token($try === 1), 'Accept: application/vnd.api+json'],
-    CURLOPT_POSTFIELDS => ['parent_id' => $folder, 'filename' => rawurlencode($sendName), 'override-name-exist' => 'false', 'content' => new CURLFile($send, 'application/octet-stream', $sendName)]]);
-  $raw = curl_exec($ch); $st = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
-  if ($st === 401 && $try === 0) continue;
-  $resp = [$st, (string)$raw];
-}
+[$st, $raw, $j] = zoho_upload($folder, $send, $sendName);
 if ($cleanup) @unlink($cleanup);
-[$st, $raw] = $resp ?: [0, ''];
-$j = json_decode($raw, true) ?: [];
-if (!in_array($st, [200, 201], true)) { error_log('LatchHub upload: ' . $st . ' ' . substr($raw, 0, 300)); out(502, ['error' => 'Zoho did not accept the upload.', 'status' => $st]); }
+if (!in_array($st, [200, 201], true)) { error_log('LatchHub upload: ' . $st . ' ' . substr($raw, 0, 300)); out(502, ['error' => 'Zoho did not accept the upload (HTTP ' . $st . ').', 'status' => $st, 'detail' => substr($raw, 0, 300)]); }
 $id = pick_id($j) ?? '';
-if ($id === '') {   /* Zoho's reply shape is not documented well: find the file we just stored by name */
-  $base = pathinfo($sendName, PATHINFO_FILENAME);
-  foreach (zoho_list($folder) as $it) { if (!$it['folder'] && $it['name'] === $sendName) { $id = $it['id']; break; } }
-  if ($id === '') foreach (zoho_list($folder) as $it) { if (!$it['folder'] && strpos($it['name'], $base) === 0) $id = $it['id']; }
-}
+if ($id === '') $id = zoho_find_id($folder, $sendName);
 db()->prepare('INSERT INTO lh_files (zoho_id,client_key,name,bytes,orig_bytes,method,user_id,created_at) VALUES (?,?,?,?,?,?,?,?)')->execute([$id, $key, $sendName, $bytes, (int)$f['size'], substr($method, 0, 40), (int)$user['id'], now()]);
 if ($id === '') error_log('LatchHub upload: no file id in Zoho reply: ' . substr($raw, 0, 300));
 out(200, ($id === '' ? ['warning' => 'Zoho accepted the upload but did not return a file id. Check the client folder in WorkDrive.'] : []) + ['ok' => true, 'id' => $id, 'name' => $sendName, 'original_bytes' => (int)$f['size'], 'stored_bytes' => $bytes, 'compression' => $method, 'saved_percent' => $f['size'] > 0 ? (int)round((1 - $bytes / $f['size']) * 100) : 0]);

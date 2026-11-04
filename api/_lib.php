@@ -162,6 +162,30 @@ function zoho_list(string $folderId, int $cap = 500): array {
   return $items;
 }
 
+/* multipart upload of a local file into a Zoho folder; returns [http status, raw reply, decoded reply] */
+function zoho_upload(string $folderId, string $path, string $name): array {
+  $z = cfg()['zoho'];
+  $resp = null;
+  for ($try = 0; $try < 2 && !$resp; $try++) {
+    $ch = curl_init(rtrim($z['api'], '/') . '/upload');
+    curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 900, CURLOPT_CONNECTTIMEOUT => 15,
+      CURLOPT_HTTPHEADER => ['Authorization: Zoho-oauthtoken ' . zoho_token($try === 1), 'Accept: application/vnd.api+json'],
+      CURLOPT_POSTFIELDS => ['parent_id' => $folderId, 'filename' => rawurlencode($name), 'override-name-exist' => 'false', 'content' => new CURLFile($path, 'application/octet-stream', $name)]]);
+    $raw = curl_exec($ch); $st = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+    if ($st === 401 && $try === 0) continue;
+    $resp = [$st, (string)$raw];
+  }
+  [$st, $raw] = $resp ?: [0, ''];
+  return [$st, $raw, json_decode($raw, true) ?: []];
+}
+/* Zoho's upload reply shape is not documented well: when it carries no id, find the file we just stored by name */
+function zoho_find_id(string $folderId, string $name): string {
+  $base = pathinfo($name, PATHINFO_FILENAME); $id = '';
+  foreach (zoho_list($folderId) as $it) { if (!$it['folder'] && $it['name'] === $name) return $it['id']; }
+  foreach (zoho_list($folderId) as $it) { if (!$it['folder'] && strpos($it['name'], $base) === 0) $id = $it['id']; }
+  return $id;
+}
+
 /* ---------- clients ↔ Zoho folders ---------- */
 function valid_client_key(string $k): bool { return (bool)preg_match('/^[A-Za-z0-9_-]{3,40}$/', $k); }
 function safe_name(string $n, string $fallback = 'file'): string {
@@ -222,6 +246,12 @@ function is_under_root(string $fileId): bool {
 }
 
 /* ---------- compression ---------- */
+/* '64M' -> bytes */
+function ini_bytes(string $v): int {
+  $v = trim($v); if ($v === '') return 0;
+  $n = (int)$v; $u = strtolower(substr($v, -1));
+  return $u === 'g' ? $n * 1073741824 : ($u === 'm' ? $n * 1048576 : ($u === 'k' ? $n * 1024 : $n));
+}
 function shell_ok(): bool {
   $d = array_map('trim', explode(',', (string)ini_get('disable_functions')));
   return function_exists('exec') && function_exists('shell_exec') && !in_array('exec', $d, true) && !in_array('shell_exec', $d, true);

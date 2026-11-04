@@ -139,8 +139,12 @@ function openNewBrand(){
     e.status='Working…';drawFiles();
     try{
       if(e.role==='book'){const a=await analyzePdf(e.file,t=>{e.status=t;drawFiles()});apply(a);
-        st.book={title:guessName(e.file.name)+' brand book',file:e.file,pages:a.pages};e.status=`${a.colors.length} colours · ${a.fonts.length} fonts · ${a.rules.length} rules · ${a.grads.length} gradients`}
-      else if(e.role==='logo'){const l=await processLogo(e.file);l.fid=e.id;st.logos.push(l);drawLogos();
+        let nl=0,sz='';
+        try{const r=await logosFromPdf(e.file,t=>{e.status=t;drawFiles()});r.logos.forEach(l=>{l.fid=e.id;st.logos.push(l)});nl=r.logos.length;drawLogos()}catch(err){console.warn('logo extraction',err)}
+        let bookFile=e.file;
+        try{const c=await PDFT.compress(e.file,{prog:t=>{e.status=t;drawFiles()}});if(c.file!==e.file){bookFile=c.file;sz=' · PDF '+_mb(c.before)+' → '+_mb(c.after)}}catch(err){console.warn('compress',err)}
+        st.book={title:guessName(e.file.name)+' brand book',file:bookFile,pages:a.pages};e.status=`${a.colors.length} colours · ${a.fonts.length} fonts · ${a.rules.length} rules · ${a.grads.length} gradients · ${nl} logo${nl===1?'':'s'} from the PDF${sz}`}
+      else if(e.role==='logo'){const l=await processLogo(e.file);l.fid=e.id;if(/\.pdf$/i.test(e.file.name)){const sv=await vectorSvgOf(e.file);if(sv)l.svg=sv}st.logos.push(l);drawLogos();
         if(!q('#nb-cols').value.trim()&&l.ink.length){append('#nb-cols',l.ink.map(h=>`${colourName(h)} ${h} | From logo – confirm`));prev()}
         if(!q('#nb-name').value.trim())q('#nb-name').value=guessName(e.file.name);e.status='Converted ✓'}
       else e.status='Skipped'
@@ -165,8 +169,7 @@ function openNewBrand(){
       const nb=newBrand(name);nb.user=true;const par=q('#nb-parent').value;if(par)nb.parent=par;nb.notes=q('#nb-desc').value.trim();
       nb.colors=parseColours(q('#nb-cols').value,'Primary');nb.fonts=parseFonts(q('#nb-fonts').value);nb.rules.notes=q('#nb-rules').value.trim();
       const bs=slug2(name);
-      nb.logos=st.logos.map(l=>{const base=`${bs}_${slug2(l.group)}_${slug2(l.name)}`,F=[];if(l.svg)F.push({label:'SVG',url:l.svg,filename:base+'.svg'});F.push({label:'PNG',url:l.png,filename:base+'.png'},{label:'JPG',url:l.jpg,filename:base+'.jpg'},{label:'Square PNG',url:l.sqpng,filename:base+'_square.png'},{label:'Square JPG',url:l.sqjpg,filename:base+'_square.jpg'});
-        if(l.source&&/^(pdf|ai)$/.test(l.ext))F.push({label:l.ext.toUpperCase()+' (source)',url:l.source,filename:base+'.'+l.ext});return{id:uid(),name:l.name,group:l.group,filename:base,preview:l.preview,formats:F,w:l.w,h:l.h}});
+      nb.logos=st.logos.map(l=>logoEntry(l,bs));
       nb.elements=st.grads.filter(g=>g.on).map((g,i)=>{const css=gradCss(g),png=gradPng(g);return{id:uid(),type:'gradient',name:g.name,css,note:'Found on page '+g.page+' of the brand book',stops:g.stops.filter((s,i)=>i%2===0||i===g.stops.length-1).map(s=>({name:colourName(s.hex),hex:s.hex})),preview:png,formats:[{label:'PNG',url:png,filename:`${bs}_gradient_${i+1}.png`}],user:true}});
       if(st.book){const key='blob:'+uid();try{await DB.set(key,st.book.file)}catch{}nb.book={title:st.book.title,blobKey:key,filename:`${bs}_brand-book.pdf`,mb:Math.round(st.book.file.size/104857.6)/10,pages:st.book.pages}}
       if(!nb.elements.length)delete nb.elements;

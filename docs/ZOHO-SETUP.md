@@ -53,3 +53,9 @@ Result in WorkDrive: `LatchHub / <Client> / Brand assets / <group> / file` and `
 - Only the admin can delete a client. Files in Zoho are never deleted by the app.
 - The first person to open the site after this version is deployed publishes the existing clients (and any clients created earlier in that browser) to the server.
 - Downloads are cached on the server in a `lh-cache` folder next to `lh-config.php`; you can empty that folder any time.
+
+## PDFs: automatic compression and logo extraction
+When a brand-book PDF is added (new client, or dropped into "Upload logo files" on an existing client) the app, in the browser:
+1. **finds the vector logos** in the PDF and stores each as **SVG, PNG, JPG, square PNG/JPG and a vector PDF**. Only logos drawn as vector shapes are found; a logo that is a flat picture inside the PDF (or live, non-outlined text) cannot become an SVG. Check the list and press ✕ on anything that is not a logo.
+2. **compresses the PDF** (pages are re-drawn as compressed pictures; typically 70–85% smaller, text no longer selectable) before it is stored in Zoho. PDFs under 3 MB are left alone.
+Logo PDFs of a single logo get an SVG as well when they are real vector artwork. Everything runs in the browser, so the server needs no PDF software.

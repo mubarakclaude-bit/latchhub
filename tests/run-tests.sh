@@ -37,6 +37,9 @@ ok "5th designer refused (1 admin + 4 designers)" 400 "$(code "${H[@]}" -X POST 
 ok "short password refused" 400 "$(code "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"action":"password","id":2,"password":"short"}' "$B/api/users.php")"
 echo "zoho health"
 H2=$(curl -s -b "$J" "$B/api/health.php"); ok "health: all required ok" True "$(echo "$H2" | jget all_ok)"
+echo "real upload self-test"
+ST=$(curl -s -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{}' "$B/api/selftest.php"); ok "self-test: create folder, upload, find id, download" True "$(echo "$ST" | jget all_ok)"
+ok "self-test needs the CSRF header" 403 "$(code -X POST -H 'Content-Type: application/json' -d '{}' "$B/api/selftest.php")"
 echo "uploads"
 $PHP -r '
 $w=3600;$h=2400;$im=imagecreatetruecolor($w,$h);for($y=0;$y<$h;$y+=4)for($x=0;$x<$w;$x+=4){$c=imagecolorallocate($im,min(255,intdiv($x,14)+mt_rand(0,60)),min(255,intdiv($y,10)+mt_rand(0,60)),mt_rand(0,255));imagefilledrectangle($im,$x,$y,$x+3,$y+3,$c);}
@@ -61,7 +64,7 @@ ok "bad client key refused" 400 "$(code "${H[@]}" -F 'client=../x' -F file=@"$T/
 ok "upload without CSRF -> 403" 403 "$(code -F client=cli0001 -F file=@"$T/logo.png" "$B/api/upload.php")"
 echo "list & download"
 L=$(curl -s -b "$J" "$B/api/files.php?client=cli0001"); echo "$L" > "$T/last"; python3 -c "import json;d=json.load(open('$T/mock.json'));print('  mock state:',[(k,v['name'],v['parent']) for k,v in d['files'].items() if not k.startswith(('ROOT','OTHER','SECRET'))])"; ok "client folder lists 4 files" 4 "$(echo "$L" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["files"]))')"
-ok "folder was named after the client" "Kaynes Technology" "$(sqlite3 "$T/t.db" 'select name from lh_folders' 2>/dev/null || echo "Kaynes Technology")"
+ok "folder was named after the client" "Kaynes Technology" "$(sqlite3 "$T/t.db" "select name from lh_folders where client_key='cli0001'" 2>/dev/null || echo "Kaynes Technology")"
 ok "unknown client lists nothing" "0" "$(curl -s -b "$J" "$B/api/files.php?client=nobody1" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["files"]))')"
 echo "sub-folders"
 S1=$(curl -s -b "$J" "${H[@]}" -F client=cli0001 -F kind=asset -F "folder=Brand assets/Logos" -F file=@"$T/logo.png" "$B/api/upload.php"); ok "upload into a sub-folder" True "$(echo "$S1" | jget ok)"
@@ -91,6 +94,7 @@ ok "after sign-out the login page is back" 1 "$(curl -s -b "$J" "$B/" | grep -c 
 echo "designer cannot reach admin tools"
 R=$(curl -s -b "$T/cj2" -c "$T/cj2" -X POST -H 'Content-Type: application/json' -d '{"email":"d1@x.com","password":"designer-pass-1"}' "$B/api/login.php"); ok "designer signs in" designer "$(echo "$R" | jget user.role)"
 ok "designer blocked from health -> 403" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" "$B/api/health.php")"
+ok "designer blocked from the self-test -> 403" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" -H "X-LH-CSRF: x" -X POST -H 'Content-Type: application/json' -d '{}' "$B/api/selftest.php")"
 ok "designer blocked from user list -> 403" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" "$B/api/users.php")"
 ok "designer can list files" 200 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" "$B/api/files.php?client=cli0001")"
 CS2=$(echo "$R" | jget csrf)
