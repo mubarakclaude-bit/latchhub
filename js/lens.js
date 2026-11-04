@@ -53,13 +53,18 @@ function lensColours(cv,brand){
     if(groups.match.length||groups.tint.length)items.push({cat:'Colour',level:'pass',title:'Brand colour present',detail:[...groups.match.map(c=>c.rel.p.name+' '+c.rel.p.hex+' ('+(c.pct*100).toFixed(1)+'%)'),...[]].join(', ')||'Only lighter shades of brand colours are used.'+' (that is allowed)'});
     else items.push({cat:'Colour',level:'fail',title:'No brand colour detected',detail:'None of the palette colours (ΔE ≤ '+tol+') or their light shades cover at least 1% of the creative.',fix:'Use '+pal.filter(p=>p.chroma>=10).slice(0,2).map(p=>p.name+' '+p.hex).join(' or ')+' for the main shapes or text.'});
     if(groups.tint.length)items.push({cat:'Colour',level:'pass',title:'Light shades of brand colours – fine',detail:groups.tint.map(c=>c.hex+' = '+c.note+' · '+(c.pct*100).toFixed(1)+'%').join(' | ')+'. Tints add depth and are allowed; just keep the full-strength colour present as the anchor.'});
-    groups.shade.forEach(c=>items.push({cat:'Colour',level:'fail',title:'Darker shade of '+c.rel.p.name+' – not allowed ('+c.hex+')',detail:'Covers '+(c.pct*100).toFixed(1)+'%. Darkening a brand colour changes its identity.',fix:'Replace with '+c.rel.p.name+' '+c.rel.p.hex+', or use a lighter tint of it.'}));
-    if(!photo)groups.near.forEach(c=>items.push({cat:'Colour',level:c.pct>=.03?'fail':'warn',title:'Off-shade colour '+c.hex,detail:'Covers '+(c.pct*100).toFixed(1)+'% and sits close to '+c.rel.p.name+' without matching it ('+c.note+').',fix:'Use exactly '+c.rel.p.hex+' (click the swatch in the client page to copy it).'}));
-    groups.forb.forEach(c=>items.push({cat:'Colour',level:'fail',title:'Forbidden colour '+c.hex,detail:'Covers '+(c.pct*100).toFixed(1)+'% – '+c.note+'.',fix:'Remove it or swap it for a palette colour.'}));
-    if(!photo)groups.off.filter(c=>c.pct>=.02).forEach(c=>items.push({cat:'Colour',level:'warn',title:'Colour outside the palette '+c.hex,detail:'Covers '+(c.pct*100).toFixed(1)+'%. Not a brand colour or a shade of one.',fix:'Confirm it is intentional (photo, partner logo, client-approved accent) or replace it.'}));
+    groups.shade.forEach(c=>items.push({cat:'Colour',level:'fail',title:'Darker shade of '+c.rel.p.name+' – not allowed ('+c.hex+')',detail:'Covers '+(c.pct*100).toFixed(1)+'%. Darkening a brand colour changes its identity.',fix:'Replace with '+c.rel.p.name+' '+c.rel.p.hex+', or use a lighter tint of it.',hlColor:c.hex}));
+    if(!photo)groups.near.forEach(c=>items.push({cat:'Colour',level:c.pct>=.03?'fail':'warn',title:'Off-shade colour '+c.hex,detail:'Covers '+(c.pct*100).toFixed(1)+'% and sits close to '+c.rel.p.name+' without matching it ('+c.note+').',fix:'Use exactly '+c.rel.p.hex+' (click the swatch in the client page to copy it).',hlColor:c.hex}));
+    groups.forb.forEach(c=>items.push({cat:'Colour',level:'fail',title:'Forbidden colour '+c.hex,detail:'Covers '+(c.pct*100).toFixed(1)+'% – '+c.note+'.',fix:'Remove it or swap it for a palette colour.',hlColor:c.hex}));
+    if(!photo)groups.off.filter(c=>c.pct>=.02).forEach(c=>items.push({cat:'Colour',level:'warn',title:'Colour outside the palette '+c.hex,detail:'Covers '+(c.pct*100).toFixed(1)+'%. Not a brand colour or a shade of one.',fix:'Confirm it is intentional (photo, partner logo, client-approved accent) or replace it.',hlColor:c.hex}));
     if(photo)items.push({cat:'Colour',level:'info',title:'Photographic / gradient content',detail:'Many blended colours, so only brand presence and shades are judged – off-palette colours inside photos are not flagged.'});
     if(!items.some(i=>i.level==='fail'||i.level==='warn'))items.push({cat:'Colour',level:'pass',title:'Colours are on brand',detail:'Palette adherence '+Math.round(brandPct+tintPct+pct(groups.neutral))+'% of the visible colour area.'})}
   return{items,clusters:cl,photo}}
+function lensTextFix(bg,brand){
+  if(!bg)return'Darken the text or lighten the background.';
+  const opts=[...(brand.colors||[]).map(c=>({n:c.name+' '+c.hex,rgb:hexToRgb(c.hex)})),{n:'white #FFFFFF',rgb:[255,255,255]},{n:'black #000000',rgb:[0,0,0]}].map(o=>({...o,cr:contrastRatio(o.rgb,bg)})).filter(o=>o.cr>=4.5).sort((a,b)=>b.cr-a.cr);
+  const pal=opts.filter(o=>!/white|black/.test(o.n.split(' ')[0].toLowerCase())||(brand.colors||[]).some(c=>c.hex.toLowerCase()===o.n.split(' ')[1].toLowerCase()));
+  const pick=(pal[0]||opts[0]);return pick?'Set this text in '+pick.n+' ('+pick.cr.toFixed(1)+':1 on this background) or change the background.':'Darken the text or lighten the background until the contrast reaches 4.5:1.'}
 /* ---------- layout scan ---------- */
 function dilate(m,W,H,rx,ry){const a=new Uint8Array(W*H),b=new Uint8Array(W*H);
   for(let y=0;y<H;y++){let last=-1e9;for(let x=0;x<W;x++){if(m[y*W+x])last=x;if(x-last<=rx)a[y*W+x]=1}last=1e9;for(let x=W-1;x>=0;x--){if(m[y*W+x])last=x;if(last-x<=rx)a[y*W+x]=1}}
@@ -90,32 +95,26 @@ function lensLogoList(brand){
   const set=[brand,...S.brands.filter(y=>y.parent===brand.id)];const par=S.brands.find(x=>x.id===brand.parent);if(par)set.push(par);
   const out=[];set.forEach(b=>b.logos.forEach(l=>{if(/pattern|reference/i.test(l.group||''))return;const png=(l.formats||[]).find(f=>f.label==='PNG'),url=png?png.url:(l.check?l.data:null);if(url)out.push({id:l.id,name:(b===brand?'':b.name+' – ')+l.name,check:true,w:l.w||0,h:l.h||0,data:url})}));
   return out.slice(0,12)}
-function lensClearSpace(S,box,rules,items,marks){
+function lensClearSpace(S,box,rules,items,marks,fmt){
   const sc=S.sc,{W,H}=S;let bx0=box.x*sc,by0=box.y*sc,bx1=(box.x+box.w)*sc,by1=(box.y+box.h)*sc,lw=bx1-bx0,lh=by1-by0;const o=v=>Math.round(v/sc);
   const reqH=rules.clear!=null&&rules.clear!==''?+rules.clear:(rules.clearW?0:.4);let C=Math.max(reqH*lh,(+rules.clearW||0)*lw);
-  if(S.photo){items.push({cat:'Logo',level:'info',title:'Clear space – busy background',detail:'The logo sits on a photo or textured area, so spacing cannot be measured reliably. Keep roughly '+o(C)+' px of calm space around it.'});return}
-  let ex0=bx0,ey0=by0,ex1=bx1,ey1=by1;const gapH=Math.max(3,Math.max(lw,lh)*.16),gapV=Math.max(2,Math.min(lw,lh)*.05),maxW=lw*4.2,maxH=lh*1.4;
-  for(let it=0;it<3;it++){let n0=ex0,m0=ey0,n1=ex1,m1=ey1;for(let y=Math.max(0,Math.floor(ey0-gapV));y<Math.min(H,Math.ceil(ey1+gapV));y++)for(let x=Math.max(0,Math.floor(ex0-gapH));x<Math.min(W,Math.ceil(ex1+gapH));x++){if(!S.ink[y*W+x])continue;if(x<n0)n0=x;if(x>n1)n1=x;if(y<m0)m0=y;if(y>m1)m1=y}
-    if(n1-n0>maxW||m1-m0>maxH)break;ex0=n0;ey0=m0;ex1=n1;ey1=m1}
-  const bx0o=bx0,by0o=by0,bx1o=bx1,by1o=by1;bx0=ex0;by0=ey0;bx1=ex1;by1=ey1;lw=bx1-bx0;lh=by1-by0;C=Math.max(reqH*lh,(+rules.clearW||0)*lw);
+  if(!S.photo){let ex0=bx0,ey0=by0,ex1=bx1,ey1=by1;const gapH=Math.max(3,Math.max(lw,lh)*.16),gapV=Math.max(2,Math.min(lw,lh)*.05),maxW=lw*4.2,maxH=lh*1.4;
+    for(let it=0;it<3;it++){let n0=ex0,m0=ey0,n1=ex1,m1=ey1;for(let y=Math.max(0,Math.floor(ey0-gapV));y<Math.min(H,Math.ceil(ey1+gapV));y++)for(let x=Math.max(0,Math.floor(ex0-gapH));x<Math.min(W,Math.ceil(ex1+gapH));x++){if(!S.ink[y*W+x])continue;if(x<n0)n0=x;if(x>n1)n1=x;if(y<m0)m0=y;if(y>m1)m1=y}
+      if(n1-n0>maxW||m1-m0>maxH)break;ex0=n0;ey0=m0;ex1=n1;ey1=m1}
+    bx0=ex0;by0=ey0;bx1=ex1;by1=ey1;lw=bx1-bx0;lh=by1-by0;C=Math.max(reqH*lh,(+rules.clearW||0)*lw)}
+  /* where the logo sits: corner, equal top/side margins */
+  lensLogoPlacement(S,{x0:bx0,y0:by0,x1:bx1,y1:by1},C,fmt,items);
+  const out={x0:bx0,y0:by0,x1:bx1,y1:by1};
+  if(S.photo){items.push({cat:'Logo',level:'info',title:'Clear space – busy background',detail:'The logo sits on a photo or textured area, so spacing cannot be measured reliably. Keep roughly '+o(C)+' px of calm space around it.',hl:[{x:bx0/W,y:by0/H,w:lw/W,h:lh/H}]});return out}
   const pad=Math.max(lw,lh)*.07,{ink}=S;let minD=1e9,np=null,vx0=1e9,vy0=1e9,vx1=-1,vy1=-1;
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){if(!ink[y*W+x])continue;if(x>bx0-pad&&x<bx1+pad&&y>by0-pad&&y<by1+pad)continue;
     const dx=Math.max(bx0-x,x-bx1,0),dy=Math.max(by0-y,y-by1,0),dd=Math.max(dx,dy);if(dd<minD){minD=dd;np=[x,y]}if(dd<C){if(x<vx0)vx0=x;if(y<vy0)vy0=y;if(x>vx1)vx1=x;if(y>vy1)vy1=y}}
-  const short=Math.min(W,H),margins={left:bx0,top:by0,right:W-bx1,bottom:H-by1},ratio=minD/C;
-  const near=np&&minD<C*1.5,zone={t:'rect',x:(bx0-C)/W,y:(by0-C)/H,w:(lw+2*C)/W,h:(lh+2*C)/H,c:ratio>=1?'#22c55e':'#ef4444',dash:1};marks.push(zone);
-  const side=np?(np[1]>by1?'below':np[1]<by0?'above':np[0]>bx1?'to the right of':'to the left of'):'';
-  /* 1) clear space = empty room between the logo and OTHER content (the canvas edge is judged separately below) */
-  if(minD>=C)items.push({cat:'Logo',level:'pass',title:'Logo clear space respected',detail:(np?'Nearest other element is '+o(minD)+' px away':'Nothing else sits near the logo')+' – the brand needs '+o(C)+' px ('+(C/lh).toFixed(2)+' × logo height).'});
+  const ratio=minD/C,zone={t:'rect',x:(bx0-C)/W,y:(by0-C)/H,w:(lw+2*C)/W,h:(lh+2*C)/H,c:ratio>=1?'#22c55e':'#ef4444',dash:1};marks.push(zone);
+  const side=np?(np[1]>by1?'below':np[1]<by0?'above':np[0]>bx1?'to the right of':'to the left of'):'',logoR={x:bx0/W,y:by0/H,w:lw/W,h:lh/H,k:'ok'};
+  if(minD>=C)items.push({cat:'Logo',level:'pass',title:'Logo clear space respected',detail:(np?'Nearest other element is '+o(minD)+' px away':'Nothing else sits near the logo')+' – the brand needs '+o(C)+' px ('+(C/lh).toFixed(2)+' × logo height).',hl:[{x:zone.x,y:zone.y,w:zone.w,h:zone.h,k:'ok'}],ref:'Logo exclusion-zone practice (per-client rule)'});
   else{if(vx1>=0)marks.push({t:'rect',x:vx0/W,y:vy0/H,w:(vx1-vx0)/W,h:(vy1-vy0)/H,c:'#ef4444'});
-    items.push({cat:'Logo',level:ratio>=.6?'warn':'fail',title:'Logo clear space is violated',detail:'Another element sits '+o(minD)+' px '+side+' the logo; the clear zone needs '+o(C)+' px ('+(C/lh).toFixed(2)+' × logo height) on every side.',fix:'Move that element at least '+o(C-minD)+' px away or reduce the logo – the dashed box on the preview shows the protected zone.'})}
-  /* 2) edge placement – logos usually sit on an edge/corner, so judge their margin to the canvas edge on its own */
-  const anch=Object.entries(margins).filter(([,v])=>v<short*.14).sort((a,b)=>a[1]-b[1]),need=Math.max(C*.5,short*.025);
-  if(anch.length){const m0=anch[0][1],names=anch.map(a=>a[0]),vals=anch.map(a=>o(a[1]));
-    if(m0<need)items.push({cat:'Logo',level:m0<need*.6?'fail':'warn',title:'Logo is too close to the '+anch[0][0]+' edge',detail:'Only '+o(m0)+' px between the logo and the '+anch[0][0]+' edge; keep at least '+o(need)+' px so it is not trimmed by platform cropping or print trim.',fix:'Move the logo inwards by '+o(need-m0)+' px or more.'});
-    else{let det='Logo is anchored to the '+names.join(' & ')+' edge'+(names.length>1?'s':'')+' with '+names.map((n,i)=>n+' '+vals[i]+' px').join(' · ')+' margins.';
-      if(anch.length>=2&&Math.abs(anch[0][1]-anch[1][1])>Math.max(anch[1][1]*.18,3)){items.push({cat:'Logo',level:'warn',title:'Logo edge margins are uneven',detail:det,fix:'Use the same margin on both edges – about '+px8((anch[0][1]+anch[1][1])/2,sc)+' px.'})}
-      else items.push({cat:'Logo',level:'pass',title:'Logo edge margin is healthy'+(anch.length>1?' and balanced':''),detail:det})}}
-  else items.push({cat:'Logo',level:'info',title:'Logo floats inside the layout',detail:'It is not anchored to an edge, so clear space to other content is what matters here.'})}
+    items.push({cat:'Logo',level:ratio>=.6?'warn':'fail',title:'Logo clear space is violated',detail:'Another element sits '+o(minD)+' px '+side+' the logo; the clear zone needs '+o(C)+' px ('+(C/lh).toFixed(2)+' × logo height) on every side.',fix:'Move that element at least '+o(C-minD)+' px away or reduce the logo – the dashed box on the preview shows the protected zone.',hl:[{x:zone.x,y:zone.y,w:zone.w,h:zone.h,k:'ref'},logoR,...(vx1>=0?[{x:vx0/W,y:vy0/H,w:(vx1-vx0)/W,h:(vy1-vy0)/H}]:[])],ref:'Logo exclusion-zone practice (per-client rule)'})}
+  return out}
 /* ---------- design knowledge base ---------- */
 const LENS_KB={
   styles:[
@@ -134,19 +133,20 @@ function readStyle(f){const sc=LENS_KB.styles.map(s=>({s,v:s.test(f)})).filter(x
 /* ---------- layout checks ---------- */
 function lensLayout(S,comps,fmt,logoBox,items,marks,feat,brand){
   const{W,H,sc,d}=S,N=W*H,o=v=>Math.round(v/sc),short=Math.min(W,H),body=comps.filter(c=>!c.hero),mv=(x0,y0,x1,y1,c,dash)=>marks.push({t:'rect',x:x0/W,y:y0/H,w:(x1-x0)/W,h:(y1-y0)/H,c,dash});
+  const RRm=(x0,y0,x1,y1,k)=>({x:x0/W,y:y0/H,w:(x1-x0)/W,h:(y1-y0)/H,k}),RCm=c=>RRm(c.x0,c.y0,c.x1,c.y1),strip=(n,t)=>RRm(...(n==='left'?[0,0,t,H]:n==='right'?[W-t,0,W,H]:n==='top'?[0,0,W,t]:[0,H-t,W,H]),'ref'),intr=(n,t)=>body.filter(c=>!c.full&&(n==='left'?c.x0<t:n==='right'?c.x1>W-t:n==='top'?c.y0<t:c.y1>H-t)).map(RCm);
   if(!body.length){items.push({cat:'Composition',level:'info',title:'Nothing to measure',detail:'The creative is a single image/background with no separate elements.'});return}
   const content=body.filter(c=>!c.full),minM=fmt.margin*short;
   /* margins */
   if(content.length){const L=Math.min(...content.map(c=>c.x0)),R=W-Math.max(...content.map(c=>c.x1)),T=Math.min(...body.map(c=>c.y0)),B=H-Math.max(...body.map(c=>c.y1));
     const sides=[['left',L],['right',R],['top',T],['bottom',B]].filter(([,v])=>v<minM);
-    sides.forEach(([n,v])=>items.push({cat:'Spacing',level:v<minM*.45?'fail':'warn',title:'Content is very close to the '+n+' edge',detail:'Nearest element is '+o(v)+' px from the '+n+' edge; this format needs about '+o(minM)+' px ('+Math.round(fmt.margin*100)+'% of the short side).',fix:'Pull everything inside a '+px8(minM,sc)+' px margin.'}));
-    if(Math.abs(L-R)>W*.035&&L>=minM*.6&&R>=minM*.6)items.push({cat:'Spacing',level:'warn',title:'Left and right margins are uneven',detail:'Left margin '+o(L)+' px vs right margin '+o(R)+' px.',fix:'Set both to '+px8((L+R)/2,sc)+' px so the layout sits square on the canvas.'});
+    sides.forEach(([n,v])=>items.push({cat:'Spacing',level:v<minM*.45?'fail':'warn',title:'Content is very close to the '+n+' edge',detail:'Nearest element is '+o(v)+' px from the '+n+' edge; this format needs about '+o(minM)+' px ('+Math.round(fmt.margin*100)+'% of the short side).',fix:'Pull everything inside a '+px8(minM,sc)+' px margin.',hl:[strip(n,minM),...intr(n,minM)],ref:'Safe margins (Material / Apple HIG): ~4.5% of the short side'}));
+    if(Math.abs(L-R)>W*.035&&L>=minM*.6&&R>=minM*.6)items.push({cat:'Spacing',level:'warn',title:'Left and right margins are uneven',detail:'Left margin '+o(L)+' px vs right margin '+o(R)+' px.',fix:'Set both to '+px8((L+R)/2,sc)+' px so the layout sits square on the canvas.',hl:[RRm(0,0,L,H,'ref'),RRm(W-R,0,W,H,'ref')]});
     else if(!sides.length)items.push({cat:'Spacing',level:'pass',title:'Margins are healthy',detail:'Left '+o(L)+' · right '+o(R)+' · top '+o(T)+' · bottom '+o(B)+' px.'});
     mv(L,T,W-R,H-B,'rgba(99,102,241,.8)',1)}
   /* story safe zones */
   if(fmt.safe){const z=fmt.safe,bad=[];body.forEach(c=>{if(c.full&&c.h>H*.3)return;if(c.y0<z.top*H)bad.push(['top',c]);else if(c.y1>(1-z.bottom)*H)bad.push(['bottom',c])});
     marks.push({t:'rect',x:0,y:0,w:1,h:z.top,c:'rgba(245,158,11,.9)',dash:1},{t:'rect',x:0,y:1-z.bottom,w:1,h:z.bottom,c:'rgba(245,158,11,.9)',dash:1});
-    if(bad.length){bad.slice(0,3).forEach(([w,c])=>mv(c.x0,c.y0,c.x1,c.y1,'#ef4444'));items.push({cat:'Spacing',level:'warn',title:'Content in the app-UI zone ('+[...new Set(bad.map(b=>b[0]))].join(' & ')+')',detail:'Story/Reel buttons, captions and the progress bar cover roughly the top '+Math.round(z.top*100)+'% and bottom '+Math.round(z.bottom*100)+'%.',fix:'Move text and logo between y='+o(z.top*H)+' px and y='+o((1-z.bottom)*H)+' px.'})}
+    if(bad.length){bad.slice(0,3).forEach(([w,c])=>mv(c.x0,c.y0,c.x1,c.y1,'#ef4444'));items.push({cat:'Spacing',level:'warn',title:'Content in the app-UI zone ('+[...new Set(bad.map(b=>b[0]))].join(' & ')+')',detail:'Story/Reel buttons, captions and the progress bar cover roughly the top '+Math.round(z.top*100)+'% and bottom '+Math.round(z.bottom*100)+'%.',fix:'Move text and logo between y='+o(z.top*H)+' px and y='+o((1-z.bottom)*H)+' px.',hl:bad.map(([w,c])=>RCm(c)),ref:'Meta / TikTok / YouTube Shorts safe-zone guidelines'})}
     else items.push({cat:'Spacing',level:'pass',title:'Safe zones respected',detail:'Nothing important sits under the story/reel interface.'})}
   /* alignment */
   const tight=W*.005,loose=W*.026,cand=body.filter(c=>!c.full);
@@ -155,9 +155,9 @@ function lensLayout(S,comps,fmt,logoBox,items,marks,feat,brand){
   const cdev=cand.map(c=>({c,dev:Math.abs(c.cx-W/2)})).filter(x=>x.dev<=loose&&x.c.w>W*.08),edgeCand=cdev.length>=2?cand.filter(c=>!cdev.some(x=>x.c===c)):cand;
   [['x0','left'],['x1','right']].forEach(([k,name])=>group(edgeCand,k).forEach(g=>{const v=g.map(c=>c[k]),sp=Math.max(...v)-Math.min(...v);
     if(sp<=tight)aligned++;else{misaligned++;const tx=Math.round(median(v));g.forEach(c=>mv(c.x0,c.y0,c.x1,c.y1,'#f59e0b'));marks.push({t:'vline',x:tx/W,c:'#f59e0b'});
-      items.push({cat:'Alignment',level:sp>loose*.6?'fail':'warn',title:g.length+' elements are almost '+name+'-aligned but off by '+o(sp)+' px',detail:'Their '+name+' edges sit between x='+o(Math.min(...v))+' and x='+o(Math.max(...v))+' px.',fix:'Snap all '+name+' edges to x='+o(tx)+' px (use Align in your design tool, not nudging by eye).'})}}));
+      items.push({cat:'Alignment',level:sp>loose*.6?'fail':'warn',title:g.length+' elements are almost '+name+'-aligned but off by '+o(sp)+' px',detail:'Their '+name+' edges sit between x='+o(Math.min(...v))+' and x='+o(Math.max(...v))+' px.',fix:'Snap all '+name+' edges to x='+o(tx)+' px (use Align in your design tool, not nudging by eye).',hl:g.map(RCm),ref:'Gestalt continuity & common region (Wertheimer)'})}}));
   if(cdev.length){const mx=Math.max(...cdev.map(x=>x.dev));if(mx>tight&&(cdev.length>=2||cdev[0].c.w>W*.2)){misaligned++;cdev.forEach(x=>mv(x.c.x0,x.c.y0,x.c.x1,x.c.y1,'#f59e0b'));marks.push({t:'vline',x:.5,c:'#f59e0b'});
-      items.push({cat:'Alignment',level:mx>loose*.6?'fail':'warn',title:'Centred elements are off the centre line by up to '+o(mx)+' px',detail:cdev.length+' element(s) are meant to be centred but their centres differ from the canvas centre.',fix:'Centre them on x='+o(W/2)+' px.'})}else aligned++}
+      items.push({cat:'Alignment',level:mx>loose*.6?'fail':'warn',title:'Centred elements are off the centre line by up to '+o(mx)+' px',detail:cdev.length+' element(s) are meant to be centred but their centres differ from the canvas centre.',fix:'Centre them on x='+o(W/2)+' px.',hl:cdev.map(x=>RCm(x.c)),ref:'Gestalt continuity (Wertheimer)'})}else aligned++}
   const leftG=group(cand,'x0').filter(g=>Math.max(...g.map(c=>c.x0))-Math.min(...g.map(c=>c.x0))<=tight),centred=cdev.filter(x=>x.dev<=tight&&x.c.w<W*.8);
   if(leftG.length&&centred.length>=2&&leftG[0].length>=2)items.push({cat:'Alignment',level:'info',title:'Mixed alignment: left-aligned and centred elements',detail:'Part of the layout hangs from a left edge and part from the centre line.',fix:'Fine when deliberate (e.g. centred logo over left-aligned copy); otherwise pick one axis.'});
   if(!misaligned&&aligned)items.push({cat:'Alignment',level:'pass',title:'Edges line up',detail:aligned+' alignment group(s) share an exact axis – the layout reads as ordered.'});
@@ -165,7 +165,7 @@ function lensLayout(S,comps,fmt,logoBox,items,marks,feat,brand){
   const col=[...cand].sort((a,b)=>a.y0-b.y0),gaps=[];for(let i=1;i<col.length;i++){const g=col[i].y0-col[i-1].y1;if(g>=0)gaps.push({g,a:col[i-1],b:col[i]})}
   if(gaps.length>=2){const gv=gaps.map(x=>x.g),mean=gv.reduce((a,b)=>a+b,0)/gv.length,cv=Math.sqrt(gv.reduce((s,v)=>s+(v-mean)**2,0)/gv.length)/mean;
     if(cv>.42&&Math.max(...gv)>H*.03){const target=px8(mean,sc);gaps.forEach(x=>{if(Math.abs(x.g-mean)>mean*.45)marks.push({t:'rect',x:Math.min(x.a.x0,x.b.x0)/W,y:x.a.y1/H,w:Math.abs(Math.max(x.a.x1,x.b.x1)-Math.min(x.a.x0,x.b.x0))/W,h:x.g/H,c:'rgba(244,63,94,.35)',fill:1})});
-      items.push({cat:'Spacing',level:'warn',title:'Vertical spacing between blocks is uneven',detail:'Gaps between stacked blocks: '+gv.map(v=>o(v)+' px').join(', ')+'.',fix:'Use one gap – about '+target+' px (a multiple of 8) – between related blocks, and larger only to separate groups.'})}
+      items.push({cat:'Spacing',level:'warn',title:'Vertical spacing between blocks is uneven',detail:'Gaps between stacked blocks: '+gv.map(v=>o(v)+' px').join(', ')+'.',fix:'Use one gap – about '+target+' px (a multiple of 8) – between related blocks, and larger only to separate groups.',hl:gaps.filter(x=>Math.abs(x.g-mean)>mean*.45).map(x=>RRm(Math.min(x.a.x0,x.b.x0),x.a.y1,Math.max(x.a.x1,x.b.x1),x.b.y0)),ref:'Gestalt proximity (Wertheimer); 8-pt spacing system'})}
     else items.push({cat:'Spacing',level:'pass',title:'Even vertical rhythm',detail:'Gaps between blocks: '+gv.map(v=>o(v)+' px').join(', ')+'.'})}
   /* typography from line bands */
   const textComps=body.filter(c=>c.dens>.05&&c.dens<.85&&c.h<H*.5&&c.w>c.h*.35),lines=[];
@@ -176,27 +176,27 @@ function lensLayout(S,comps,fmt,logoBox,items,marks,feat,brand){
   feat.levels=levels.length;feat.ratio=ratio;
   const textLines=lines.reduce((a,l)=>a+l.bands.length,0);
   if(textLines>=3){
-    if(levels.length===1)items.push({cat:'Typography',level:'warn',title:'Flat hierarchy – all text is one size',detail:'Every line measures about '+o(levels[0].max)+' px tall, so nothing leads the eye.',fix:'Make the headline 2–3× the body size and keep a small tertiary level for details.'});
-    else if(levels.length>=5)items.push({cat:'Typography',level:'warn',title:'Too many text sizes ('+levels.length+')',detail:'Sizes found (px tall): '+levels.map(l=>o(l.max)).join(', ')+'.',fix:'Reduce to 3 sizes – headline, body, small – on a clear scale (≈1.25–1.5× steps).'});
-    else if(ratio<1.3)items.push({cat:'Typography',level:'warn',title:'Headline and next size are too close ('+ratio.toFixed(2)+'×)',detail:'The largest text is only slightly bigger than the next level, so hierarchy is weak.',fix:'Scale the headline to at least 1.5× (ideally 2×) the next level.'});
+    if(levels.length===1)items.push({cat:'Typography',level:'warn',title:'Flat hierarchy – all text is one size',detail:'Every line measures about '+o(levels[0].max)+' px tall, so nothing leads the eye.',fix:'Make the headline 2–3× the body size and keep a small tertiary level for details.',hl:textComps.map(RCm),ref:'Modular type scale (Bringhurst); Swiss typographic hierarchy'});
+    else if(levels.length>=5)items.push({cat:'Typography',level:'warn',title:'Too many text sizes ('+levels.length+')',detail:'Sizes found (px tall): '+levels.map(l=>o(l.max)).join(', ')+'.',fix:'Reduce to 3 sizes – headline, body, small – on a clear scale (≈1.25–1.5× steps).',hl:textComps.map(RCm),ref:'Modular type scale (Bringhurst)'});
+    else if(ratio<1.3)items.push({cat:'Typography',level:'warn',title:'Headline and next size are too close ('+ratio.toFixed(2)+'×)',detail:'The largest text is only slightly bigger than the next level, so hierarchy is weak.',fix:'Scale the headline to at least 1.5× (ideally 2×) the next level.',hl:textComps.map(RCm),ref:'Modular type scale (Bringhurst)'});
     else items.push({cat:'Typography',level:'pass',title:'Clear type hierarchy',detail:levels.length+' text levels; headline is '+ratio.toFixed(1)+'× the next size.'})}
   const leadBad=[];lines.forEach(l=>{if(l.bands.length<3)return;const hs=l.bands.map(b=>b.h),ph=median(hs),p=[];for(let i=1;i<l.bands.length;i++)p.push(l.bands[i].y0-l.bands[i-1].y0);const mean=p.reduce((a,b)=>a+b,0)/p.length,cv=Math.sqrt(p.reduce((s,v)=>s+(v-mean)**2,0)/p.length)/mean,g=(mean-ph)/ph;
     if(g<.1)leadBad.push({l,msg:'very tight line spacing (lines almost touching)',fix:'Increase line-height – about 120–150% for body, 105–115% for large headlines.'});else if(g>1.15)leadBad.push({l,msg:'very loose line spacing',fix:'Reduce line-height so the lines read as one block (≈ 130–150%).'});else if(cv>.14)leadBad.push({l,msg:'uneven line spacing ('+p.map(v=>o(v)).join(', ')+' px pitch)',fix:'Use one fixed leading value for the whole paragraph.'})});
-  leadBad.slice(0,2).forEach(x=>{const c=x.l.c;mv(c.x0,c.y0,c.x1,c.y1,'#f59e0b');items.push({cat:'Typography',level:'warn',title:'Text block with '+x.msg,detail:'The multi-line block at x='+o(c.x0)+' px, y='+o(c.y0)+' px.',fix:x.fix})});
+  leadBad.slice(0,2).forEach(x=>{const c=x.l.c;mv(c.x0,c.y0,c.x1,c.y1,'#f59e0b');items.push({cat:'Typography',level:'warn',title:'Text block with '+x.msg,detail:'The multi-line block at x='+o(c.x0)+' px, y='+o(c.y0)+' px.',fix:x.fix,hl:[RCm(c)]})});
   if(lines.some(l=>l.bands.length>=3)&&!leadBad.length)items.push({cat:'Typography',level:'pass',title:'Consistent line spacing',detail:'Multi-line text keeps an even, readable leading.'});
   const lowC=[];textComps.forEach(c=>{let fr=0,fg=0,fb=0,n=0,br=0,bg=0,bb=0,m=0;for(let y=c.y0;y<c.y1;y++)for(let x=c.x0;x<c.x1;x++){const p=y*W+x,o2=p*4;if(S.ink[p]&&S.lab[p]===c.id){fr+=d[o2];fg+=d[o2+1];fb+=d[o2+2];n++}else if(!S.ink[p]){br+=d[o2];bg+=d[o2+1];bb+=d[o2+2];m++}}
-    if(!n||!m)return;const cr=contrastRatio([fr/n,fg/n,fb/n],[br/m,bg/m,bb/m]),small=(c.h<H*.06);if(cr<3||(cr<4.5&&small))lowC.push({c,cr,small})});
-  lowC.slice(0,3).forEach(x=>{mv(x.c.x0,x.c.y0,x.c.x1,x.c.y1,'#ef4444');items.push({cat:'Typography',level:x.cr<3?'fail':'warn',title:'Low text contrast ('+x.cr.toFixed(1)+':1)',detail:'The text at x='+o(x.c.x0)+' px, y='+o(x.c.y0)+' px is hard to read ('+(x.small?'small text needs 4.5:1':'needs at least 3:1')+').',fix:'Darken the text or lighten the background; the brand\'s darkest colour on its lightest tint works well.'})});
+    if(!n||!m)return;const cr=contrastRatio([fr/n,fg/n,fb/n],[br/m,bg/m,bb/m]),small=(c.h<H*.06);if(cr<3||(cr<4.5&&small))lowC.push({c,cr,small,bgc:[br/m,bg/m,bb/m]})});
+  lowC.slice(0,3).forEach(x=>{mv(x.c.x0,x.c.y0,x.c.x1,x.c.y1,'#ef4444');items.push({cat:'Typography',level:x.cr<3?'fail':'warn',title:'Low text contrast ('+x.cr.toFixed(1)+':1)',detail:'The text at x='+o(x.c.x0)+' px, y='+o(x.c.y0)+' px is hard to read ('+(x.small?'small text needs 4.5:1':'needs at least 3:1')+').',fix:lensTextFix(x.bgc,brand),hl:[RCm(x.c)],ref:'WCAG 2.1 contrast (4.5:1 body, 3:1 large)'})});
   if(textComps.length&&!lowC.length)items.push({cat:'Typography',level:'pass',title:'Text contrast is readable',detail:'No text block falls below the recommended contrast.'});
   if((brand.fonts||[]).length)items.push({cat:'Typography',level:'info',title:'Brand typefaces to confirm: '+brand.fonts.slice(0,3).map(f=>f.name).join(', '),detail:'An exported image cannot reveal which font was used.',fix:'Check the text styles in your source file (Figma / PSD / AI) against these.'});
   /* balance & whitespace */
   let wsum=0,cx=0,cy=0;body.forEach(c=>{wsum+=c.ink;cx+=c.cx*c.ink;cy+=c.cy*c.ink});
   if(wsum){cx/=wsum;cy/=wsum;const dx=(cx-W/2)/W,dy=(cy-H/2)/H;feat.dx=dx;
-    if(Math.abs(dx)>.2)items.push({cat:'Composition',level:'warn',title:'Visual weight pulls to the '+(dx<0?'left':'right'),detail:'The centre of mass sits '+Math.round(Math.abs(dx)*100)+'% off-centre horizontally.',fix:'Balance it with a lighter element, a logo or a graphic on the '+(dx<0?'right':'left')+' – unless the asymmetry is the concept.'});
+    if(Math.abs(dx)>.2)items.push({cat:'Composition',level:'warn',title:'Visual weight pulls to the '+(dx<0?'left':'right'),detail:'The centre of mass sits '+Math.round(Math.abs(dx)*100)+'% off-centre horizontally.',fix:'Balance it with a lighter element or a graphic on the '+(dx<0?'right':'left')+' – unless the asymmetry is the concept.',hl:body.filter(c=>dx<0?c.cx<W/2:c.cx>W/2).map(RCm),ref:'Visual weight & balance (Arnheim, Harvard)'});
     else if(Math.abs(dy)>.24)items.push({cat:'Composition',level:'info',title:'Content is '+(dy<0?'top':'bottom')+'-heavy',detail:'The centre of mass is '+Math.round(Math.abs(dy)*100)+'% off-centre vertically.'});
     else items.push({cat:'Composition',level:'pass',title:'Visual weight is balanced',detail:'The layout feels stable around the centre.'})}
   let covered=0;for(let i=0;i<N;i++)if(S.dil[i]&&!body.every(c=>S.lab[i]!==c.id))covered++;const ws=1-covered/N;feat.ws=ws;
-  if(ws<.15)items.push({cat:'Composition',level:'warn',title:'Crowded layout – only '+Math.round(ws*100)+'% breathing space',detail:'Elements fill almost the whole canvas.',fix:'Remove or shrink something; aim for at least 25–30% empty space unless the style is deliberately dense.'});
+  if(ws<.15)items.push({cat:'Composition',level:'warn',title:'Crowded layout – only '+Math.round(ws*100)+'% breathing space',detail:'Elements fill almost the whole canvas.',fix:'Remove or shrink something; aim for at least 25–30% empty space unless the style is deliberately dense.',hl:body.map(RCm),ref:'Whitespace (Swiss style; Lidwell, Universal Principles of Design)'});
   else if(ws>.88)items.push({cat:'Composition',level:'info',title:'Very sparse layout ('+Math.round(ws*100)+'% empty)',detail:'Elements are small relative to the canvas.',fix:'Scale the key message up so it can be read at thumbnail size.'});
   else items.push({cat:'Composition',level:'pass',title:'Good use of white space ('+Math.round(ws*100)+'% open)',detail:'There is enough breathing room around the elements.'});
   /* bento detection */
@@ -209,29 +209,29 @@ async function lensAnalyze(canvas,brand,label){
   const col=lensColours(canvas,brand);items.push(...col.items);await tickI();
   feat.colors=col.clusters.filter(c=>c.pct>=.03).length;const top=col.clusters.slice(0,3);feat.avgL=top.reduce((s,c)=>s+c.lab[0]*c.pct,0)/(top.reduce((s,c)=>s+c.pct,0)||1);feat.sat=top.reduce((s,c)=>s+Math.min(1,Math.hypot(c.lab[1],c.lab[2])/80)*c.pct,0)/(top.reduce((s,c)=>s+c.pct,0)||1);
   const S=scanLayout(canvas);feat.photo=S.photo;feat.bgL=S.bg.lab[0];try{feat.grad=!S.flat&&!!gradientFrom(canvas)}catch{}
-  /* logo */
-  const logos=lensLogoList(brand);let logoRes=null;
-  if(logos.length){const imgs={};for(const l of logos){try{imgs[l.id]=await loadImg(l.data)}catch{}}
-    try{logoRes=await analyzeLogo2(canvas,logos,imgs,brand.rules||{},{complexBg:!S.flat,blob:async()=>{const bl=await blobLogo(canvas,logos,imgs);if(!bl||bl.score<.5)return null;const mn=+(brand.rules||{}).minLogo||0,small=mn&&bl.wPct<mn;return{level:small?'fail':'pass',title:small?'Logo too small':'Logo found',detail:'Recognised as "'+bl.L.name+'" by its colours and proportions, about '+Math.round(bl.box.w)+' px wide = '+bl.wPct.toFixed(1)+'% of the width'+(small?'. Brand rule: logo must be at least '+mn+'% of the width.':'.'),box:bl.box,boxOk:true,fuzzy:true}}})}catch(e){items.push({cat:'Logo',level:'info',title:'Logo detection failed',detail:e.message})}}
+  /* 1) LOGO – judged on its own, never as content */
+  const logos=lensLogoList(brand),imgs={};let logoRes=null,lockup=null;
+  if(logos.length){for(const l of logos){try{imgs[l.id]=await loadImg(l.data)}catch{}}
+    try{logoRes=await analyzeLogo2(canvas,logos,imgs,brand.rules||{},{complexBg:!S.flat,blob:async()=>{const bl=await blobLogo(canvas,logos,imgs);if(!bl||bl.score<.5)return null;const mn=+(brand.rules||{}).minLogo||0,small=mn&&bl.wPct<mn;return{level:small?'fail':'pass',title:small?'Logo too small':'Logo found',detail:'Recognised as "'+bl.L.name+'" by its colours and proportions, about '+Math.round(bl.box.w)+' px wide = '+bl.wPct.toFixed(1)+'% of the width'+(small?'. Brand rule: logo must be at least '+mn+'% of the width.':'.'),box:bl.box,boxOk:true,fuzzy:true,L:bl.L}}})}catch(e){items.push({cat:'Logo',level:'info',title:'Logo detection failed',detail:e.message})}}
   else items.push({cat:'Logo',level:'info',title:'No logo files to look for',detail:'Add PNG/SVG logos to this client so the lens can check placement and clear space.'});
-  if(logoRes){items.push({cat:'Logo',level:logoRes.level,title:logoRes.title,detail:logoRes.detail,fix:logoRes.level==='fail'||logoRes.level==='warn'?'Use the correct, unstretched logo from the Logos section.':''});
+  if(logoRes){const lr=logoRes.box?[{x:logoRes.box.x/canvas.width,y:logoRes.box.y/canvas.height,w:logoRes.box.w/canvas.width,h:logoRes.box.h/canvas.height,k:logoRes.boxOk?'ok':undefined}]:undefined;
+    items.push({cat:'Logo',level:logoRes.level,title:logoRes.title,detail:logoRes.detail,fix:logoRes.level==='fail'||logoRes.level==='warn'?'Use the correct, unstretched logo from the Logos section.':'',hl:lr});
     if(logoRes.box){marks.push({t:'rect',x:logoRes.box.x/canvas.width,y:logoRes.box.y/canvas.height,w:logoRes.box.w/canvas.width,h:logoRes.box.h/canvas.height,c:logoRes.boxOk?'#22c55e':'#f59e0b'});
-      if(logoRes.boxOk){const cx=(logoRes.box.x+logoRes.box.w/2)/canvas.width,cy=(logoRes.box.y+logoRes.box.h/2)/canvas.height;items.push({cat:'Logo',level:'info',title:'Logo placement: '+(cy<.33?'top':cy>.66?'bottom':'middle')+' '+(cx<.33?'left':cx>.66?'right':'centre'),detail:'Keep the logo in the same position across a campaign so it becomes a recognisable anchor.'});lensClearSpace(S,logoRes.box,brand.rules||{},items,marks)}}}
-  /* layout */
+      if(logoRes.boxOk){lockup=lensClearSpace(S,logoRes.box,brand.rules||{},items,marks,fmt);
+        /* the logo (and any tagline locked up with it) is not content: remove it from every layout measurement below */
+        const m=2;for(let y=Math.max(0,Math.floor(lockup.y0-m));y<Math.min(S.H,Math.ceil(lockup.y1+m));y++)for(let x=Math.max(0,Math.floor(lockup.x0-m));x<Math.min(S.W,Math.ceil(lockup.x1+m));x++)S.ink[y*S.W+x]=0}}}
+  try{lensBrandFit(brand,col,S,logoRes,logos,imgs,lockup,feat,items)}catch(e){console.warn('brand fit',e)}
+  /* 2) CONTENT – everything except the logo */
   let comps=[];
   if(S.photo)items.push({cat:'Composition',level:'info',title:'Photo-led image',detail:'Spacing and alignment are judged only where elements stand apart from the photo, so these checks are limited here.',fix:'Check text placement on a calm area and keep the logo on the cleanest corner.'});
-  else{comps=blocksOf(S);if(logoRes&&logoRes.box&&logoRes.boxOk){const lb=logoRes.box,sc=S.sc;comps=comps.filter(c=>!(c.cx>lb.x*sc&&c.cx<(lb.x+lb.w)*sc&&c.cy>lb.y*sc&&c.cy<(lb.y+lb.h)*sc&&c.area<lb.w*lb.h*sc*sc*2.2))}
-    lensLayout(S,comps,fmt,logoRes&&logoRes.box,items,marks,feat,brand)}
-  /* style read */
+  else{comps=blocksOf(S);lensLayout(S,comps,fmt,lockup,items,marks,feat,brand)}
+  try{lensScience(S,comps,fmt,items,col,brand)}catch(e){console.warn('science',e)}
   const st=readStyle(feat);items.push({cat:'Composition',level:'info',title:'Style read: '+st.main.name+(st.second?' (with '+st.second.name.toLowerCase()+' cues)':''),detail:'Detected from layout and colour behaviour – '+st.main.advice.join(' ')});
-  /* score */
-  const order=['Scenario','Colour','Logo','Spacing','Alignment','Typography','Composition'];items.sort((a,b)=>order.indexOf(a.cat)-order.indexOf(b.cat));
+  const order=['Scenario','Brand fit','Colour','Logo','Spacing','Alignment','Typography','Composition'];items.sort((a,b)=>order.indexOf(a.cat)-order.indexOf(b.cat));
   let score=100;items.forEach(i=>{if(i.level==='fail')score-=14;else if(i.level==='warn')score-=5});score=Math.max(0,score);
   const worst=items.reduce((m,i)=>LEVEL_RANK[i.level]>LEVEL_RANK[m]?i.level:m,'pass');
-  /* thumbnail with overlay marks */
-  const tw=Math.min(640,canvas.width),tf=tw/canvas.width,tc=document.createElement('canvas');tc.width=tw;tc.height=Math.round(canvas.height*tf);const x=tc.getContext('2d');x.drawImage(canvas,0,0,tc.width,tc.height);
-  marks.forEach(m=>{x.lineWidth=2;x.strokeStyle=m.c;x.setLineDash(m.dash?[6,4]:[]);if(m.t==='rect'){if(m.fill){x.fillStyle=m.c;x.fillRect(m.x*tc.width,m.y*tc.height,m.w*tc.width,m.h*tc.height)}else x.strokeRect(m.x*tc.width,m.y*tc.height,m.w*tc.width,m.h*tc.height)}else if(m.t==='vline'){x.beginPath();x.moveTo(m.x*tc.width,0);x.lineTo(m.x*tc.width,tc.height);x.stroke()}});x.setLineDash([]);
-  return{label,items,clusters:col.clusters.slice(0,12),level:worst==='info'?'pass':worst,score,fmt:fmt.name,style:st.main.name,thumb:tc.toDataURL('image/jpeg',.88),w:canvas.width,h:canvas.height}}
+  const tw=Math.min(640,canvas.width),tf=tw/canvas.width,tc=document.createElement('canvas');tc.width=tw;tc.height=Math.round(canvas.height*tf);tc.getContext('2d').drawImage(canvas,0,0,tc.width,tc.height);
+  return{label,items,marks,sel:null,guides:false,clusters:col.clusters.slice(0,12),level:worst==='info'?'pass':worst,score,fmt:fmt.name,style:st.main.name,thumb:tc.toDataURL('image/jpeg',.88),w:canvas.width,h:canvas.height}}
 /* ---------- logo detection v2: shape + tone correlation + colour verification ---------- */
 function renderTpl2(img,lw,lh,tw,asp=1){
   const th=Math.max(2,Math.round(tw*lh/lw*asp)),pad=Math.max(2,Math.round(tw*.08)),W=tw+2*pad,H=th+2*pad,c=document.createElement('canvas');c.width=W;c.height=H;
@@ -296,7 +296,7 @@ async function analyzeLogo2(canvas,logos,imgs,rules,opts={}){
     return{L,asp,sad:bst.sad,vis:rg.vis,box:{x:(bst.x+bst.t.pad)/sc,y:(bst.y+bst.t.pad)/sc,w:bst.t.tw/sc,h:bst.t.th/sc},wPct:bst.t.tw/W*100}};
   const sadHits=[];for(const L of logos){const h=await sadFind(L,1,1.2,6);if(h)sadHits.push(h)}
   const okHits=sadHits.filter(h=>h.sad<=26),minSad=Math.min(...okHits.map(h=>h.sad)),sadOk=okHits.filter(h=>h.sad<=minSad+8).sort((a,b)=>b.box.w*b.box.h-a.box.w*a.box.h)[0];
-  if(sadOk){let lvl='pass',det='Matched "'+sadOk.L.name+'" (colour-exact), about '+Math.round(sadOk.box.w)+' px wide = '+sadOk.wPct.toFixed(1)+'% of the width.';if(minLogo0&&sadOk.wPct<minLogo0){lvl='fail';det+=' Brand rule: logo must be at least '+minLogo0+'% of the width.'}return{level:lvl,title:lvl==='pass'?'Logo found':'Logo too small',detail:det,box:sadOk.box,boxOk:true}}
+  if(sadOk){let lvl='pass',det='Matched "'+sadOk.L.name+'" (colour-exact), about '+Math.round(sadOk.box.w)+' px wide = '+sadOk.wPct.toFixed(1)+'% of the width.';if(minLogo0&&sadOk.wPct<minLogo0){lvl='fail';det+=' Brand rule: logo must be at least '+minLogo0+'% of the width.'}return{level:lvl,title:lvl==='pass'?'Logo found':'Logo too small',detail:det,box:sadOk.box,boxOk:true,L:sadOk.L}}
   if(opts.blob){const bl=await opts.blob();if(bl)return bl}
   const results=[];let bestComb=0;
   for(const L of logos.slice(0,4)){const img=imgs[L.id];if(!img)continue;const lw=L.w||img.naturalWidth||300,lh=L.h||img.naturalHeight||100,cands=[];

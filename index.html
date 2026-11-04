@@ -81,7 +81,19 @@ textarea{width:100%;min-height:120px}
 h2{margin:0;font-size:28px;letter-spacing:-.04em}h3{margin:0 0 10px;font-size:15px}.sub{color:var(--mute);margin:4px 0 18px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}.pad{padding:14px 18px}
 .drop{border:1.5px dashed var(--line2);border-radius:12px;padding:48px 30px;text-align:center;color:var(--mute);background:var(--panel);cursor:pointer;transition:.12s}.drop:hover,.drop.over{border-color:var(--ink);color:var(--ink)}
-.res{display:grid;grid-template-columns:280px 1fr;margin-top:14px}.res img.th{width:100%;display:block;background:repeating-conic-gradient(var(--chk1) 0 25%,var(--chk2) 0 50%) 0 0/16px 16px}
+.res{display:grid;grid-template-columns:minmax(260px,44%) 1fr;margin-top:14px;height:calc(100vh - 150px);min-height:480px;max-height:900px}
+.res .pv{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line);background:var(--bg)}
+.res .stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:14px;overflow:hidden}
+.res .sbox{position:relative;display:inline-block;line-height:0;max-width:100%;max-height:100%;box-shadow:0 2px 18px rgba(0,0,0,.18)}
+.res img.th{display:block;max-width:100%;max-height:calc(100vh - 340px);min-height:80px;width:auto;height:auto;background:repeating-conic-gradient(var(--chk1) 0 25%,var(--chk2) 0 50%) 0 0/16px 16px}
+.ovwrap,.ov,.ovmask{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.pulse{animation:lpulse 1.1s ease-in-out infinite}@keyframes lpulse{50%{opacity:.25}}
+.res .cap{padding:10px 14px;border-top:1px solid var(--line);font-size:12.5px;line-height:1.45;min-height:64px;max-height:130px;overflow:auto}
+.res .an{overflow-y:auto;min-height:0;padding:14px 18px}
+li.it{padding:8px 10px;margin:0 -10px;border-radius:8px;border:1px solid transparent}li.it.clk{cursor:pointer}li.it.clk:hover{background:var(--panel);border-color:var(--line2)}li.it.sel{background:var(--panel);border-color:var(--ink)}
+li.it .where{color:var(--mute);font-size:11.5px;opacity:0;transition:.12s}li.it:hover .where,li.it.sel .where{opacity:1}li.it .ref{color:var(--mute);font-size:11.5px;font-style:italic}
+.kb{margin-top:22px;border:1px solid var(--line);border-radius:10px;padding:12px 16px;background:var(--panel)}.kbl{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin-top:6px}.kbl>div{font-size:12.5px;line-height:1.4}.kbl small{display:block;color:var(--mute);font-style:italic}.kbl span{display:block}
+@media(max-width:860px){.res{grid-template-columns:1fr;grid-template-rows:minmax(0,46%) minmax(0,1fr);height:calc(100vh - 90px)}.res .pv{border-right:0;border-bottom:1px solid var(--line)}.res img.th{max-height:calc(46vh - 150px)}.res .cap{max-height:80px;min-height:0}}
 .badge{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:5px;letter-spacing:.06em}
 .b-pass{background:var(--pass-bg);color:var(--pass)}.b-warn{background:var(--warn-bg);color:var(--warn)}.b-fail{background:var(--fail-bg);color:var(--fail)}.b-info{background:transparent;color:var(--mute);border:1px solid var(--line2)}
 .chk{list-style:none;margin:10px 0;padding:0;display:grid;gap:9px}.chk li{display:flex;gap:10px;align-items:flex-start}.chk .badge{flex:none;margin-top:1px;min-width:54px;text-align:center}.chk small{display:block;color:var(--mute);font-size:12.5px}
@@ -138,7 +150,7 @@ button.logo{border:0;background:none;cursor:pointer;color:inherit;text-align:lef
 <script src="js/icons.js?v=28"></script>
 <script src="js/extra.js?v=28"></script>
 <script src="js/import.js?v=28"></script>
-<script src="js/lens.js?v=28"></script>
+<script src="js/lens.js?v=29"></script><script src="js/lens2.js?v=2"></script>
 <script>
 /* ---------- helpers ---------- */
 const $=(s,r=document)=>r.querySelector(s);
@@ -451,13 +463,19 @@ function viewCheck(){
   <div class="row" style="margin-bottom:12px"><label>Client: <select data-c="checkBrand">${S.brands.map(x=>`<option value="${x.id}" ${x.id===c.brandId?'selected':''}>${esc(x.parent?'↳ ':'')}${esc(x.name)}</option>`).join('')}</select></label></div>
   <div class="drop" id="drop" data-a="pick"><b>Drop creatives here</b> or click to choose<br><span style="font-size:12px">PNG, JPG, WEBP, MP4/MOV (5 frames sampled). From Figma / Photoshop / Illustrator: export as PNG or JPG first.</span><input type="file" id="cf" multiple hidden accept="image/*,video/*"></div>
   ${c.busy?`<p class="muted">⏳ ${esc(c.busy)}</p>`:''}
-  ${c.results.map(resCard).join('')}
-  <p class="muted" style="font-size:12px;margin-top:22px"><b>What it knows:</b> brand palette incl. light tints (allowed) and darker shades (not allowed), logo variants, clear space, platform formats and safe zones (post, story, banner, print), 8-pt spacing, alignment axes, type hierarchy and leading, contrast, and current style families (minimal, bold type, gradient, dark mode, photo-led, bento, pastel, maximalist). <b>Limits:</b> it works from an exported image, so it cannot identify fonts; photo-led layouts are judged lightly. Treat the score as guidance.</p>`}
-function resCard(r){
-  const lab={pass:'PASS',warn:'REVIEW',fail:'FAIL'}[r.level],cats=[...new Set(r.items.map(i=>i.cat||'Colour'))];
-  return`<div class="card res"><div><img class="th" src="${r.thumb}"><div class="legend"><span><i style="background:#22c55e"></i>logo</span><span><i style="background:#ef4444"></i>issue</span><span><i style="background:#f59e0b"></i>alignment</span><span><i style="background:#6366f1"></i>content margin</span></div></div><div class="pad"><div class="row" style="justify-content:space-between"><b>${esc(r.label)}</b><span class="row"><span class="score s-${r.level}">${r.score??''}${r.score!=null?'<small>/100</small>':''}</span><span class="badge b-${r.level}">${lab}</span></span></div>
+  ${c.results.map((r,ri)=>resCard(r,ri)).join('')}
+  ${lensKnowledgeHTML()}`}
+function resCard(r,ri){
+  const lab={pass:'PASS',warn:'REVIEW',fail:'FAIL'}[r.level],cats=[...new Set(r.items.map(i=>i.cat||'Colour'))],head={'Brand fit':['Brand assessment','this creative compared with the client\'s colours, logos, fonts and written rules'],Logo:['Logo analysis','right logo · corner placement · top &amp; side margins · clear space'],Spacing:['Content analysis','spacing · alignment · typography · composition (logo excluded)']};
+  const li=(i,ii)=>{const loc=(i.hl&&i.hl.length)||i.hlColor,has=i.level==='fail'||i.level==='warn'||loc;
+    return`<li class="it${has?' clk':''}${r.sel===ii?' sel':''}"${has?` data-ls="${ri}:${ii}" tabindex="0"`:''}><span class="badge b-${i.level}">${i.level.toUpperCase()}</span><div><b>${esc(i.title)}</b>${i.detail?`<small>${esc(i.detail)}</small>`:''}${i.fix?`<small class="fix">→ ${esc(i.fix)}</small>`:''}${i.ref?`<small class="ref">Basis: ${esc(i.ref)}</small>`:''}${has?`<small class="where">📍 ${loc?'Show where on the design':'Applies to the whole design'}</small>`:''}</div></li>`};
+  const anyG=(r.marks||[]).length>0;
+  return`<div class="card res"><div class="pv"><div class="stage"><div class="sbox"><img class="th" src="${r.thumb}" alt=""><div class="ovwrap">${lensOverlayHTML(r)}</div></div></div>
+  <div class="legend">${anyG?`<label class="chkl"><input type="checkbox" data-lg="${ri}" ${r.guides?'checked':''}> Show measurement guides</label>`:''}<span><i style="background:#ff3b6b"></i>selected issue</span><span><i style="background:#22c55e"></i>logo / OK</span></div>
+  <div class="cap">${lensCapHTML(r)}</div></div>
+  <div class="an"><div class="row" style="justify-content:space-between"><b>${esc(r.label)}</b><span class="row"><span class="score s-${r.level}">${r.score??''}${r.score!=null?'<small>/100</small>':''}</span><span class="badge b-${r.level}">${lab}</span></span></div>
   <div class="muted" style="font-size:12px">${r.w}×${r.h}px${r.fmt?' · '+esc(r.fmt):''}${r.style?' · '+esc(r.style):''}</div>
-  ${cats.map(cat=>`${cat==='Logo'?'<div class="lsec">Logo analysis <span>detection · placement · edge margin · clear space</span></div>':cat==='Spacing'?'<div class="lsec">Content analysis <span>spacing · alignment · typography · composition (logo excluded)</span></div>':''}<div class="lcat">${esc(cat)}</div><ul class="chk">${r.items.filter(i=>(i.cat||'Colour')===cat).map(i=>`<li><span class="badge b-${i.level}">${i.level.toUpperCase()}</span><div><b>${esc(i.title)}</b>${i.detail?`<small>${esc(i.detail)}</small>`:''}${i.fix?`<small class="fix">→ ${esc(i.fix)}</small>`:''}</div></li>`).join('')}</ul>`).join('')}
+  ${cats.map(cat=>`${head[cat]?`<div class="lsec">${head[cat][0]} <span>${head[cat][1]}</span></div>`:''}<div class="lcat">${esc(cat)}</div><ul class="chk">${r.items.map((i,ii)=>[i,ii]).filter(([i])=>(i.cat||'Colour')===cat).map(([i,ii])=>li(i,ii)).join('')}</ul>`).join('')}
   <div class="lcat">Dominant colours</div><div class="chips">${r.clusters.map(c=>`<span class="chip" title="${esc(c.note||'')}"><i style="background:${c.hex}"></i>${c.hex} · ${(c.pct*100).toFixed(0)}% · ${esc(c.status==='match'?'✓ '+c.note:c.status==='tint'?'◐ '+c.note:c.status==='shade'?'✕ '+c.note:(c.note||c.status||''))}</span>`).join('')}</div></div></div>`}
 
 async function runCheck(files){
