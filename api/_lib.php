@@ -39,7 +39,7 @@ function pdo_connect(): PDO {
   return new PDO($d['dsn'] ?? ('mysql:host=' . $d['host'] . ';dbname=' . $d['name'] . ';charset=utf8mb4'), $d['user'] ?? null, $d['pass'] ?? null,
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
 }
-const LH_SCHEMA = 4;   /* bump when a table is added: installs created earlier are upgraded automatically on the next request */
+const LH_SCHEMA = 6;   /* bump when a table is added: installs created earlier are upgraded automatically on the next request */
 function ensure_schema_once(PDO $x): void {
   try { $r = $x->query("SELECT v FROM lh_kv WHERE k='schema'")->fetch(); if ($r && (int)$r['v'] >= LH_SCHEMA) return; } catch (Throwable $e) { /* lh_kv itself may be missing */ }
   ensure_schema($x);
@@ -67,18 +67,20 @@ function ensure_schema(?PDO $x = null): void {
   $x->exec("CREATE TABLE IF NOT EXISTS lh_kv (k VARCHAR(40) PRIMARY KEY, v TEXT NOT NULL, exp INT NOT NULL)$tail");
   $x->exec("CREATE TABLE IF NOT EXISTS lh_folders (client_key VARCHAR(40) PRIMARY KEY, zoho_id VARCHAR(80) NOT NULL, name VARCHAR(120) NOT NULL)$tail");
   $x->exec("CREATE TABLE IF NOT EXISTS lh_brands (id VARCHAR(40) PRIMARY KEY, name VARCHAR(190) NOT NULL, json LONGTEXT NOT NULL, version INT NOT NULL DEFAULT 1, updated_by INT NOT NULL DEFAULT 0, updated_at DATETIME NOT NULL)$tail");
+  $x->exec("CREATE TABLE IF NOT EXISTS lh_deleted (id VARCHAR(40) PRIMARY KEY, name VARCHAR(190) NOT NULL, json LONGTEXT NOT NULL, folder_id VARCHAR(80) NOT NULL DEFAULT '', files LONGTEXT NOT NULL, deleted_by INT NOT NULL DEFAULT 0, deleted_at DATETIME NOT NULL)$tail");
+  $x->exec("CREATE TABLE IF NOT EXISTS lh_pending (id $pk, zoho_id VARCHAR(80) NOT NULL, kind VARCHAR(12) NOT NULL, reason VARCHAR(255) NOT NULL, tries INT NOT NULL DEFAULT 0, created_at DATETIME NOT NULL)$tail");
   $x->exec("CREATE TABLE IF NOT EXISTS lh_files (id $pk, zoho_id VARCHAR(80) NOT NULL, client_key VARCHAR(40) NOT NULL, name VARCHAR(255) NOT NULL, bytes BIGINT NOT NULL, orig_bytes BIGINT NOT NULL, method VARCHAR(40) NOT NULL, user_id INT NOT NULL, created_at DATETIME NOT NULL" . $ix('client_key') . ")$tail");
 }
 
 /* ---------- sessions & permissions ---------- */
-function start_session(): void {
+function start_session(bool $readonly = false): void {
   if (session_status() === PHP_SESSION_ACTIVE) return;
   $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
   ini_set('session.use_strict_mode', '1');
   ini_set('session.gc_maxlifetime', (string)(LH_SESSION_HOURS * 3600));
   session_name('lhsess');
   session_set_cookie_params(['lifetime' => 0, 'path' => '/', 'secure' => $https, 'httponly' => true, 'samesite' => 'Lax']);
-  session_start();
+  session_start($readonly ? ['read_and_close' => true] : []);
 }
 function current_user(): ?array {
   start_session();
@@ -301,4 +303,52 @@ function compress_pdf(string $tmp): ?array {
   exec(escapeshellarg($gs) . ' -q -dNOPAUSE -dBATCH -dSAFER -sDEVICE=pdfwrite -dCompatibilityLevel=1.5 -dPDFSETTINGS=/ebook -dColorImageResolution=150 -dGrayImageResolution=150 -sOutputFile=' . escapeshellarg($outp) . ' ' . escapeshellarg($tmp) . ' 2>&1', $o, $rc);
   if ($rc !== 0 || !is_file($outp) || filesize($outp) < 1000 || filesize($outp) >= filesize($tmp) * 0.95) { @unlink($outp); return null; }
   return ['path' => $outp, 'ext' => 'pdf', 'method' => 'pdf-ghostscript'];
+}
+
+/* ---------- removing things: always to the Zoho trash (recoverable), never permanent ---------- */
+/* Zoho "move to trash" = status 51 (restore = 1, permanent delete = 61) */
+function zoho_trash(string $id): array {
+  [$st, $j, $raw] = zoho_api('PATCH', '/files/' . rawurlencode($id), ['data' => ['attributes' => ['status' => '51'], 'type' => 'files']]);
+  $already = strpos($raw, 'F221') !== false;   /* "Resource has been Trashed already" */
+  return [in_array($st, [200, 201, 204], true) || $already, $st, substr($raw, 0, 240)];
+}
+/* rename a file or folder in Zoho; returns [ok, http status, reply]. Zoho error R002 = a folder with that name already exists */
+function zoho_rename(string $id, string $name): array {
+  [$st, $j, $raw] = zoho_api('PATCH', '/files/' . rawurlencode($id), ['data' => ['attributes' => ['name' => $name], 'type' => 'files']]);
+  return [in_array($st, [200, 201, 204], true), $st, substr($raw, 0, 240)];
+}
+/* Zoho file ids that a brand record links to */
+function zoho_ids_in(string $json): array {
+  preg_match_all('#api/download\.php\?id=([A-Za-z0-9]{10,80})#', $json, $m);
+  return array_values(array_unique($m[1]));
+}
+function cache_forget(string $id): void {
+  $cp = cfg_path();
+  if ($cp && preg_match('/^[A-Za-z0-9]{10,80}$/', $id)) { $f = dirname($cp) . '/lh-cache/' . $id; if (is_file($f)) @unlink($f); }
+}
+function queue_trash(string $id, string $kind, string $why): void {
+  db()->prepare('INSERT INTO lh_pending (zoho_id,kind,reason,tries,created_at) VALUES (?,?,?,0,?)')->execute([$id, $kind, substr($why, 0, 250), now()]);
+}
+/* trash files of one brand – only files LatchHub itself uploaded for that brand; returns the number trashed */
+function trash_brand_files(array $ids, string $brandKey): int {
+  $n = 0;
+  foreach (array_slice($ids, 0, 300) as $id) {
+    $st = db()->prepare('SELECT 1 FROM lh_files WHERE zoho_id=? AND client_key=?');
+    $st->execute([$id, $brandKey]);
+    if (!$st->fetch()) continue;                      /* not ours: never touched */
+    [$ok, $code, $raw] = zoho_trash($id);
+    if ($ok) { db()->prepare('DELETE FROM lh_files WHERE zoho_id=?')->execute([$id]); cache_forget($id); $n++; }
+    else { queue_trash($id, 'file', 'HTTP ' . $code . ' ' . $raw); error_log('LatchHub trash failed ' . $id . ': ' . $code . ' ' . $raw); }
+  }
+  return $n;
+}
+/* retry what could not be trashed earlier (Zoho down, busy…) */
+function process_pending(int $max = 5): void {
+  try {
+    foreach (db()->query('SELECT id,zoho_id,kind,tries FROM lh_pending WHERE tries < 8 ORDER BY id LIMIT ' . (int)$max)->fetchAll() as $r) {
+      [$ok, $code, $raw] = zoho_trash($r['zoho_id']);
+      if ($ok) { db()->prepare('DELETE FROM lh_pending WHERE id=?')->execute([$r['id']]); db()->prepare('DELETE FROM lh_files WHERE zoho_id=?')->execute([$r['zoho_id']]); cache_forget($r['zoho_id']); }
+      else db()->prepare('UPDATE lh_pending SET tries=tries+1, reason=? WHERE id=?')->execute([substr('HTTP ' . $code . ' ' . $raw, 0, 250), $r['id']]);
+    }
+  } catch (Throwable $e) { error_log('LatchHub pending: ' . $e->getMessage()); }
 }

@@ -140,11 +140,13 @@ function openNewBrand(){
     try{
       if(e.role==='book'){const a=await analyzePdf(e.file,t=>{e.status=t;drawFiles()});apply(a);
         let nl=0,sz='';
-        try{const r=await logosFromPdf(e.file,t=>{e.status=t;drawFiles()});r.logos.forEach(l=>{l.fid=e.id;st.logos.push(l)});nl=r.logos.length;drawLogos()}catch(err){console.warn('logo extraction',err)}
+        try{const r=await logosFromPdf(e.file,t=>{e.status=t;drawFiles()});r.logos.forEach(l=>{l.fid=e.id;st.logos.push(l)});nl=r.logos.length;drawLogos();
+          let vb=0;for(const l of r.logos){if(vb>=4)break;const vs=await logoVariants(l,st.logos);vs.forEach(p=>{p.fid=e.id;st.logos.push(p)});vb+=vs.length}if(vb){nl+=vb;drawLogos()}}catch(err){console.warn('logo extraction',err)}
         let bookFile=e.file;
         try{const c=await PDFT.compress(e.file,{prog:t=>{e.status=t;drawFiles()}});if(c.file!==e.file){bookFile=c.file;sz=' · PDF '+_mb(c.before)+' → '+_mb(c.after)}}catch(err){console.warn('compress',err)}
         st.book={title:guessName(e.file.name)+' brand book',file:bookFile,pages:a.pages};e.status=`${a.colors.length} colours · ${a.fonts.length} fonts · ${a.rules.length} rules · ${a.grads.length} gradients · ${nl} logo${nl===1?'':'s'} from the PDF${sz}`}
       else if(e.role==='logo'){const l=await processLogo(e.file);l.fid=e.id;if(/\.pdf$/i.test(e.file.name)){const sv=await vectorSvgOf(e.file);if(sv)l.svg=sv}st.logos.push(l);drawLogos();
+        try{const vs=await logoVariants(l,st.logos);vs.forEach(p=>{p.fid=e.id;st.logos.push(p)});if(vs.length)drawLogos()}catch(err){console.warn('variants',err)}
         if(!q('#nb-cols').value.trim()&&l.ink.length){append('#nb-cols',l.ink.map(h=>`${colourName(h)} ${h} | From logo – confirm`));prev()}
         if(!q('#nb-name').value.trim())q('#nb-name').value=guessName(e.file.name);e.status='Converted ✓'}
       else e.status='Skipped'

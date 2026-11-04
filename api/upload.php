@@ -10,6 +10,7 @@ declare(strict_types=1);
 require __DIR__ . '/_lib.php';
 require_method('POST');
 $user = require_login(true);
+@set_time_limit(600);   /* big brand books: do not let the host's default script time limit cut the transfer to Zoho short */
 /* a file bigger than post_max_size arrives as an empty request – say so instead of a confusing 'missing client' */
 if (empty($_POST) && empty($_FILES) && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
   out(413, ['error' => 'The file is larger than this server allows (post_max_size=' . ini_get('post_max_size') . ', upload_max_filesize=' . ini_get('upload_max_filesize') . '). Raise both in hPanel → PHP Configuration (64M is a good value).']);

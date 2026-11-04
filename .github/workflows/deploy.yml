@@ -54,7 +54,7 @@ jobs:
           ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
           rsync -az --chmod=D755,F644 --stats \
             -e "ssh -i $HOME/.ssh/id_deploy -p $PORT -o IdentitiesOnly=yes" \
-            --exclude='.git' --exclude='.github' --exclude='tests' --exclude='docs' \
+            --exclude='.git' --exclude='.github' --exclude='tests' --exclude='docs' --exclude='tools' \
             --exclude='README.md' --exclude='lh-config.sample.php' --exclude='.DS_Store' \
             ./ "$USER_NAME@$HOST:$REMOTE_DIR"
           rm -f ~/.ssh/id_deploy

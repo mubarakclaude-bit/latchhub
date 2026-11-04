@@ -4,6 +4,11 @@ DirectoryIndex index.php index.html
   RewriteEngine On
   # the login gate is index.php – don't let people open the app file directly
   RewriteRule ^index\.html$ index.php [L]
+  # developer folders are never public (they are not deployed either; this also covers stale copies)
+  RewriteRule ^(docs|tools|tests)(/|$) - [F,L]
+  # client files only for signed-in people: they go through serve.php (assets/latchhub = the logo on the sign-in page, stays public)
+  RewriteCond %{REQUEST_URI} !/assets/latchhub/
+  RewriteRule ^(assets/.+|brand-hub-data\.json)$ serve.php?f=$1 [L]
 </IfModule>
 # Hostinger serves .mjs as text/plain, which browsers refuse for ES modules (breaks the PDF reader in Smart import)
 <IfModule mod_mime.c>

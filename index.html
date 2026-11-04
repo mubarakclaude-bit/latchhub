@@ -150,7 +150,7 @@ button.logo{border:0;background:none;cursor:pointer;color:inherit;text-align:lef
 <div class="toast" id="toast"></div>
 <script src="js/icons.js?v=28"></script>
 <script src="js/extra.js?v=28"></script>
-<script src="js/import.js?v=29"></script><script src="js/pdftools.js?v=4"></script>
+<script src="js/import.js?v=30"></script><script src="js/pdftools.js?v=4"></script><script src="js/variants.js?v=3"></script>
 <script src="js/lens.js?v=38"></script><script src="js/lens2.js?v=9"></script><script src="js/sync.js?v=1"></script>
 <script>
 /* ---------- helpers ---------- */
@@ -355,7 +355,7 @@ async function fileToCanvases(file){
 }
 
 /* ================= APP STATE & UI ================= */
-const EDIT_ACTIONS=new Set(['delLink','addColor','editColor','delColor','addFont','delFont','renameLogo','delLogo','renameBrand','delEl']);
+const EDIT_ACTIONS=new Set(['logoVariants','delLink','addColor','editColor','delColor','addFont','delFont','renameLogo','delLogo','renameBrand','delEl']);
 const ui={view:'home',brandId:null,tab:'colors',edit:false,check:{brandId:null,results:[],busy:'',}};
 const brand=()=>S.brands.find(b=>b.id===ui.brandId);
 const newBrand=name=>({id:uid(),name,notes:'',colors:[],logos:[],fonts:[],rules:{tol:6,minLogo:4,requireLogo:true,neutrals:true,forbidden:'',notes:''}});
@@ -423,7 +423,7 @@ function openLinkForm(bid){$('#modal')?.remove();const b=S.brands.find(x=>x.id==
       if(!/^https?:\/\/[^\s]+\.[^\s]+/i.test(url)){toast('Enter a valid http(s) link');return}try{new URL(url)}catch{toast('Enter a valid link');return}
       if(!title){title=new URL(url).hostname.replace(/^www\./,'')}b.edited=true;(b.links=b.links||[]).push({id:uid(),title,url,kind:$('#lk-kind',m).value||linkKind(title,url)});save();m.remove();render();toast('Link added');setTimeout(()=>document.getElementById('s-links')?.scrollIntoView(),50)}});
   setTimeout(()=>$('#lk-title',m).focus(),50)}
-function logoCard(l){const f=fmtOf(l);return`<div class="lt"><div class="sq">${l.check||l.preview?`<img loading="lazy" src="${lsrc(l)}" alt="${esc(l.name)}">`:`<div class="file">${esc(f[0].label)}</div>`}</div><div class="lc"><b>${esc(l.name)}</b>${l.w&&l.preview?`<span class="muted">${Math.round(l.w)}×${Math.round(l.h)}</span>`:''}</div><div class="fmts">${f.map(x=>`<a class="fchip" href="${x.url}" download="${esc(x.filename||'')}" title="Download ${esc(x.label)}">${esc(x.label)}</a>`).join('')}</div>${ui.edit?`<div class="row" style="padding:0 12px 12px"><button class="btn sm" data-a="renameLogo" data-id="${l.id}">Rename</button><button class="btn sm del" data-a="delLogo" data-id="${l.id}">Delete</button></div>`:''}</div>`}
+function logoCard(l){const f=fmtOf(l);return`<div class="lt"><div class="sq">${l.check||l.preview?`<img loading="lazy" src="${lsrc(l)}" alt="${esc(l.name)}">`:`<div class="file">${esc(f[0].label)}</div>`}</div><div class="lc"><b>${esc(l.name)}</b>${l.w&&l.preview?`<span class="muted">${Math.round(l.w)}×${Math.round(l.h)}</span>`:''}</div><div class="fmts">${f.map(x=>`<a class="fchip" href="${x.url}" download="${esc(x.filename||'')}" title="Download ${esc(x.label)}">${esc(x.label)}</a>`).join('')}</div>${ui.edit?`<div class="row" style="padding:0 12px 12px"><button class="btn sm" data-a="renameLogo" data-id="${l.id}">Rename</button>${f.some(x=>x.label==='SVG')?`<button class="btn sm" data-a="logoVariants" data-id="${l.id}" title="Create a white (reversed) and a greyscale version from this SVG">◐ White &amp; grey</button>`:''}<button class="btn sm del" data-a="delLogo" data-id="${l.id}">Delete</button></div>`:''}</div>`}
 function secLogos(b){
   const form=ui.edit?`<div class="form"><label class="btn pri" style="cursor:pointer">＋ Upload logo files<input type="file" id="lf" multiple hidden accept=".svg,.png,.jpg,.jpeg,.webp,.pdf,.ai,.eps,.psd,.zip"></label><span class="muted">Name files by use, e.g. "White – for dark backgrounds".</span></div>`:'';
   const groups=[...new Set(b.logos.map(l=>l.group||''))];
@@ -524,7 +524,7 @@ document.addEventListener('click',async e=>{
   else if(a==='addLink'){openLinkForm(b.id);return}
   else if(a==='delLink'){b.links=(b.links||[]).filter(x=>x.id!==id)}
   else if(a==='bookblob'){const f=await DB.get(b.book.blobKey);if(!f){toast('Brand book file not found in this browser');return}const u=URL.createObjectURL(f),el=document.createElement('a');el.href=u;el.download=b.book.filename;el.click();setTimeout(()=>URL.revokeObjectURL(u),4000);return}
-  else if(a==='delEl'){b.elements=(b.elements||[]).filter(x=>x.id!==id)}
+  else if(a==='delEl'){if(!confirm('Delete this element and its files?'+(typeof LHsync!=='undefined'&&LHsync.on?' Its files in Zoho are moved to the WorkDrive trash.':'')))return;b.elements=(b.elements||[]).filter(x=>x.id!==id)}
   else if(a==='open'){ui.view='brand';ui.brandId=id;ui.anim=true}
   else if(a==='goto'){document.getElementById(id)?.scrollIntoView({behavior:'smooth'});return}
   else if(a==='tab'){ui.tab=id}
@@ -536,7 +536,8 @@ document.addEventListener('click',async e=>{
   else if(a==='renameBrand'){const n=prompt('Client name',b.name);if(n)b.name=n.trim();const d=prompt('Short note (optional)',b.notes||'');if(d!==null)b.notes=d}
   else if(a==='newBrand'){openNewBrand();return}
   else if(a==='lbg'){ui.lbg=id}
-  else if(a==='delBrand'){if(!confirm('Delete '+b.name+' and all its assets?'))return;S.brands.forEach(y=>{if(y.parent===b.id)delete y.parent});S.brands=S.brands.filter(x=>x.id!==b.id);ui.brandId=S.brands[0]?.id}
+  else if(a==='delBrand'){const sy=typeof LHsync!=='undefined'&&LHsync.on;if(sy&&LHsync.role!=='admin'){toast('Only the admin can delete a client',5000);return}
+    if(!confirm('Delete '+b.name+' and all its assets?'+(sy?'\n\nIts folder in Zoho is moved to the WorkDrive trash (it can be restored from there), and every designer will stop seeing this client.':'')))return;S.brands.forEach(y=>{if(y.parent===b.id)delete y.parent});S.brands=S.brands.filter(x=>x.id!==b.id);ui.brandId=S.brands[0]?.id}
   else if(a==='addColor'){const name=$('#cn').value.trim(),hex=normHex($('#ch').value||$('#cp').value);if(!name||!hex){toast('Enter a name and a valid HEX');return}b.colors.push({id:uid(),name,hex,role:$('#cr').value})}
   else if(a==='editColor'){const c=b.colors.find(x=>x.id===id),n=prompt('Name',c.name);if(n)c.name=n;const h=prompt('HEX',c.hex);if(h&&normHex(h))c.hex=normHex(h)}
   else if(a==='delColor'){b.colors=b.colors.filter(x=>x.id!==id)}
@@ -544,11 +545,14 @@ document.addEventListener('click',async e=>{
   else if(a==='copyCss'){copy(':root{\n'+b.colors.map(c=>`  --${b.name.toLowerCase().replace(/\W+/g,'-')}-${c.name.toLowerCase().replace(/\W+/g,'-')}: ${c.hex};`).join('\n')+'\n}');return}
   else if(a==='ase'){download(b.name+' swatches.ase',[makeASE(b.colors)],'application/octet-stream');return}
   else if(a==='renameLogo'){const l=b.logos.find(x=>x.id===id),n=prompt('Logo name',l.name);if(n)l.name=n}
-  else if(a==='delLogo'){b.logos=b.logos.filter(x=>x.id!==id)}
+  else if(a==='logoVariants'){const l=b.logos.find(x=>x.id===id);toast('Creating white and greyscale versions…',60000);
+    try{const v=await logoVariants(l,b.logos);if(!v.length){toast('Nothing to add – this logo already has them, or its colours cannot be converted',6000);return}
+      for(const p of v)b.logos.push(logoEntry(p,slug2(b.name)));toast(v.length+' version'+(v.length>1?'s':'')+' added: '+v.map(x=>x.name.split(' – ').pop()).join(' + '),5000)}catch(err){toast('⚠ '+err.message,6000);return}}
+  else if(a==='delLogo'){if(!confirm('Delete this logo and all its files?'+(typeof LHsync!=='undefined'&&LHsync.on?' Its files in Zoho are moved to the WorkDrive trash.':'')))return;b.logos=b.logos.filter(x=>x.id!==id)}
   else if(a==='addFont'){const name=$('#fn').value.trim();if(!name){toast('Enter a font name');return}
     const f={id:uid(),name,role:$('#fr').value,weights:$('#fw').value,url:$('#fu').value.trim()},file=$('#ff').files[0];
     if(file){f.file=await readFile(file);f.ext=(file.name.match(/\.\w+$/)||['.ttf'])[0];registerFont(f)}b.fonts.push(f)}
-  else if(a==='delFont'){b.fonts=b.fonts.filter(x=>x.id!==id)}
+  else if(a==='delFont'){if(!confirm('Delete this font?'+(typeof LHsync!=='undefined'&&LHsync.on?' Its file in Zoho is moved to the WorkDrive trash.':'')))return;b.fonts=b.fonts.filter(x=>x.id!==id)}
   else if(a==='export'){download('brand-hub-backup.json',[JSON.stringify(S)],'application/json');return}
   else if(a==='import'){$('#imp').click();return}
   else if(a==='pick'){$('#cf').click();return}
@@ -562,6 +566,7 @@ document.addEventListener('change',async e=>{
   else if(c==='checkBrand'){ui.check.brandId=t.value}
   else if(c&&c.startsWith('rule:')){b.edited=true;const k=c.slice(5);b.rules[k]=t.type==='checkbox'?t.checked:(t.type==='number'?+t.value:t.value);save();toast('Saved')}
   else if(t.id==='lf'){for(const f of t.files){if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){try{toast('Reading PDF…',60000);const msg=await addPdfToBrand(b,f,x=>toast(x,60000));toast(msg,7000)}catch(err){toast('⚠ '+err.message,7000)}continue}
+    if(f.type==='image/svg+xml'||/\.svg$/i.test(f.name)){try{const bs=slug2(b.name),l=await processLogo(f);b.logos.push(logoEntry(l,bs));const vs=await logoVariants(l,b.logos);vs.forEach(p=>b.logos.push(logoEntry(p,bs)));if(vs.length)toast('Logo added with '+vs.map(x=>x.name.split(' – ').pop()).join(' + ')+' versions',5000)}catch(err){toast('⚠ '+f.name+': '+err.message,6000)}continue}
     const data=await readFile(f),chk=/^image\/(svg\+xml|png|jpeg|webp)$/.test(f.type),d=chk?await logoDims(f,data):{w:0,h:0};
     b.logos.push({id:uid(),name:f.name.replace(/\.[^.]+$/,''),filename:f.name,data,check:chk,w:d.w,h:d.h})}save();render()}
   else if(t.id==='cf'){const fs=[...t.files];t.value='';runCheck(fs)}

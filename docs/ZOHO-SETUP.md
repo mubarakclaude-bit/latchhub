@@ -59,3 +59,14 @@ When a brand-book PDF is added (new client, or dropped into "Upload logo files" 
 1. **finds the vector logos** in the PDF and stores each as **SVG, PNG, JPG, square PNG/JPG and a vector PDF**. Only logos drawn as vector shapes are found; a logo that is a flat picture inside the PDF (or live, non-outlined text) cannot become an SVG. Check the list and press ✕ on anything that is not a logo.
 2. **compresses the PDF** (pages are re-drawn as compressed pictures; typically 70–85% smaller, text no longer selectable) before it is stored in Zoho. PDFs under 3 MB are left alone.
 Logo PDFs of a single logo get an SVG as well when they are real vector artwork. Everything runs in the browser, so the server needs no PDF software.
+
+## Files are only for signed-in people
+`.htaccess` sends `/assets/…` and `/brand-hub-data.json` to `serve.php`, which checks the sign-in first. Quick check from any terminal (no password needed); both lines should say 401:
+```
+curl -s -o /dev/null -w "%{http_code}\n" https://YOUR-DOMAIN/LatchHub/brand-hub-data.json
+curl -s -o /dev/null -w "%{http_code}\n" https://YOUR-DOMAIN/LatchHub/assets/kaynes/primary-logo/kaynes_primary-logo_full-colour.svg
+```
+If you see 200 instead, the host is ignoring `.htaccess` rewrite rules; tell the developer.
+
+## Renaming a client
+Renaming a client in the app also renames its folder in WorkDrive. If WorkDrive already has a folder with the new name, the app shows a warning and the old folder name stays (nothing is lost; files keep going to the same folder).

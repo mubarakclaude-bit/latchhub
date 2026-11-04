@@ -59,25 +59,25 @@ const LHsync={
   async flush(){
     if(!this.on)return;
     if(this.busy){this.again=true;return}
-    this.busy=true;this.failed=false;const el0=document.getElementById('lh-sync');if(el0){el0.onclick=null;el0.style.cursor='';el0.style.textDecoration=''}
+    this.busy=true;this.failed=false;let trashed=0,renamed=false;const el0=document.getElementById('lh-sync');if(el0){el0.onclick=null;el0.style.cursor='';el0.style.textDecoration=''}
     try{
       const ids=new Set(S.brands.map(b=>b.id));
       for(const id of Object.keys(this.ver)){if(ids.has(id))continue;
-        try{this.status('Saving…');await this.api('brands.php',{action:'delete',id});delete this.ver[id];delete this.hash[id]}
+        try{this.status('Deleting…');const r=await this.api('brands.php',{action:'delete',id});delete this.ver[id];delete this.hash[id];if(r.warning)toast(r.warning,12000);else if(r.trashed_folder)toast('Client deleted – its Zoho folder is now in the WorkDrive trash (restorable there)',7000)}
         catch(e){toast(e.status===403?'Only the admin can delete a client':e.message);this.status('');this.busy=false;await this.refresh(true);return}}
       for(const b of S.brands.slice()){
         if(this.hash[b.id]===this.h(b))continue;
         try{
           this.status('Saving…');await this.pushFiles(b);
           const r=await this.api('brands.php',{action:'save',brand:b,base_version:this.ver[b.id]||0});
-          this.ver[b.id]=r.version;this.hash[b.id]=this.h(b);
+          this.ver[b.id]=r.version;this.hash[b.id]=this.h(b);trashed+=r.trashed||0;if(r.warning)toast(r.warning,12000);if(r.renamed)renamed=true;
         }catch(e){
           if(e.status===409){
             const cur=e.data&&e.data.current,i=S.brands.findIndex(x=>x.id===b.id);
             if(cur&&i>=0){S.brands[i]=cur.brand;this.ver[b.id]=cur.version;this.hash[b.id]=this.h(cur.brand);toast('Someone else just changed "'+b.name+'" – showing their version');this.afterChange()}
             else if(!cur&&i>=0){S.brands.splice(i,1);delete this.ver[b.id];delete this.hash[b.id];toast('"'+b.name+'" was deleted by the admin');this.afterChange()}
           }else{this.fail(b,e);this.busy=false;return}}}
-      DB.set('state',S).catch(()=>{});this.status('✓ saved');setTimeout(()=>{if(!this.busy)this.status('')},2500);
+      DB.set('state',S).catch(()=>{});this.status('✓ saved'+(trashed?' · '+trashed+' file'+(trashed>1?'s':'')+' moved to the Zoho trash':'')+(renamed?' · Zoho folder renamed':''));setTimeout(()=>{if(!this.busy)this.status('')},2500);
     }finally{this.busy=false;if(this.again){this.again=false;this.flush()}}},
   /* make a failure impossible to miss: stays in the corner, click it for details and to retry */
   fail(b,e){
