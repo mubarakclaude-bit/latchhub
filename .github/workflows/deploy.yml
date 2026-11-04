@@ -13,7 +13,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
@@ -26,30 +26,35 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
+    env:
+      # folder on Hostinger, relative to the SSH user's home directory
+      REMOTE_DIR: domains/latchinfinity.com/public_html/LatchHub/
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Check deploy secrets exist
         env:
-          S: ${{ secrets.FTP_SERVER }}
-          U: ${{ secrets.FTP_USERNAME }}
-          P: ${{ secrets.FTP_PASSWORD }}
+          HOST: ${{ secrets.HOSTINGER_SFTP_HOST }}
+          PORT: ${{ secrets.HOSTINGER_SFTP_PORT }}
+          USER_NAME: ${{ secrets.HOSTINGER_SFTP_USERNAME }}
+          KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
         run: |
-          for v in S U P; do
-            if [ -z "${!v}" ]; then echo "::error::Missing GitHub secret (FTP_SERVER, FTP_USERNAME, FTP_PASSWORD). See docs/ZOHO-SETUP.md"; exit 1; fi
+          for v in HOST PORT USER_NAME KEY; do
+            if [ -z "${!v}" ]; then echo "::error::Missing GitHub secret for $v (HOSTINGER_SFTP_HOST / _PORT / _USERNAME / HOSTINGER_SSH_PRIVATE_KEY)"; exit 1; fi
           done
-      - name: Upload changed files to Hostinger
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftps
-          server-dir: ${{ secrets.FTP_SERVER_DIR || './' }}
-          exclude: |
-            **/.git*
-            **/.git*/**
-            .github/**
-            tests/**
-            docs/**
-            README.md
-            lh-config.sample.php
+      - name: Upload changed files over SSH (rsync)
+        env:
+          HOST: ${{ secrets.HOSTINGER_SFTP_HOST }}
+          PORT: ${{ secrets.HOSTINGER_SFTP_PORT }}
+          USER_NAME: ${{ secrets.HOSTINGER_SFTP_USERNAME }}
+          KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          rsync -az --chmod=D755,F644 --stats \
+            -e "ssh -i $HOME/.ssh/id_deploy -p $PORT -o IdentitiesOnly=yes" \
+            --exclude='.git' --exclude='.github' --exclude='tests' --exclude='docs' \
+            --exclude='README.md' --exclude='lh-config.sample.php' --exclude='.DS_Store' \
+            ./ "$USER_NAME@$HOST:$REMOTE_DIR"
+          rm -f ~/.ssh/id_deploy
