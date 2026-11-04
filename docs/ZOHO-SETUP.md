@@ -45,3 +45,11 @@ python3 tools/migrate_to_zoho.py --dry-run     # shows what would go where, send
 python3 tools/migrate_to_zoho.py               # asks for your admin email + password (hidden), then uploads
 ```
 Result in WorkDrive: `LatchHub / <Client> / Brand assets / <group> / file` and `LatchHub / <Client> / Original files / …`. Safe to run again – finished files are remembered and skipped. Use `--only Kaynes` for a single client. If a file fails with a message about the server upload limit, raise `upload_max_filesize` and `post_max_size` in hPanel → PHP Configuration and run it again.
+
+## Shared clients and automatic Zoho storage (how the app behaves once signed in)
+- Every client is stored on the server, so **all designers see the same clients**. A change made by one designer appears for the others within a minute (or when they return to the tab).
+- When someone adds **logos, fonts, elements or a brand book** to a client (or creates a new client), the app first uploads those files to `LatchHub / <Client> / Brand assets / …` (brand books to `Brand book`) in WorkDrive, then saves the client with links to them. Look for "Saving files to Zoho…" next to your name at the top right.
+- If two people edit the same client at the same time, the second save is refused and that person sees the first person's version (nothing is overwritten silently).
+- Only the admin can delete a client. Files in Zoho are never deleted by the app.
+- The first person to open the site after this version is deployed publishes the existing clients (and any clients created earlier in that browser) to the server.
+- Downloads are cached on the server in a `lh-cache` folder next to `lh-config.php`; you can empty that folder any time.

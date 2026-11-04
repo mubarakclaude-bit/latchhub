@@ -60,6 +60,11 @@ if ($cleanup) @unlink($cleanup);
 $j = json_decode($raw, true) ?: [];
 if (!in_array($st, [200, 201], true)) { error_log('LatchHub upload: ' . $st . ' ' . substr($raw, 0, 300)); out(502, ['error' => 'Zoho did not accept the upload.', 'status' => $st]); }
 $id = pick_id($j) ?? '';
+if ($id === '') {   /* Zoho's reply shape is not documented well: find the file we just stored by name */
+  $base = pathinfo($sendName, PATHINFO_FILENAME);
+  foreach (zoho_list($folder) as $it) { if (!$it['folder'] && $it['name'] === $sendName) { $id = $it['id']; break; } }
+  if ($id === '') foreach (zoho_list($folder) as $it) { if (!$it['folder'] && strpos($it['name'], $base) === 0) $id = $it['id']; }
+}
 db()->prepare('INSERT INTO lh_files (zoho_id,client_key,name,bytes,orig_bytes,method,user_id,created_at) VALUES (?,?,?,?,?,?,?,?)')->execute([$id, $key, $sendName, $bytes, (int)$f['size'], substr($method, 0, 40), (int)$user['id'], now()]);
 if ($id === '') error_log('LatchHub upload: no file id in Zoho reply: ' . substr($raw, 0, 300));
 out(200, ($id === '' ? ['warning' => 'Zoho accepted the upload but did not return a file id. Check the client folder in WorkDrive.'] : []) + ['ok' => true, 'id' => $id, 'name' => $sendName, 'original_bytes' => (int)$f['size'], 'stored_bytes' => $bytes, 'compression' => $method, 'saved_percent' => $f['size'] > 0 ? (int)round((1 - $bytes / $f['size']) * 100) : 0]);

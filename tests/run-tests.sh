@@ -70,6 +70,19 @@ ok "sub-folder holds 2 files" 2 "$(curl -s -b "$J" "$B/api/files.php?client=cli0
 ok "only one 'Brand assets' folder was created" 1 "$(curl -s -b "$J" "$B/api/files.php?client=cli0001" | python3 -c 'import sys,json;print(sum(1 for f in json.load(sys.stdin)["files"] if f["folder"] and f["name"]=="Brand assets"))')"
 ok "unknown sub-folder lists nothing (and is not created)" 0 "$(curl -s -b "$J" "$B/api/files.php?client=cli0001&path=Nope/Never" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["files"]))')"
 S3=$(curl -s -b "$J" "${H[@]}" -F client=cli0001 -F kind=asset -F "folder=../../etc" -F file=@"$T/logo.png" "$B/api/upload.php"); ok "'..' in a folder path cannot climb out" True "$(echo "$S3" | jget ok)"
+echo "shared brands"
+BR(){ curl -s -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d "$1" "$B/api/brands.php"; }
+ok "no brands yet" 0 "$(curl -s -b "$J" "$B/api/brands.php" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["brands"]))')"
+R1=$(BR '{"action":"save","base_version":0,"brand":{"id":"solid01","name":"Solid Semi","colors":[],"logos":[],"fonts":[],"rules":{}}}'); ok "create a brand" 1 "$(echo "$R1" | jget version)"
+ok "creating the same id again -> conflict" 409 "$(curl -s -o /dev/null -w '%{http_code}' -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"action":"save","base_version":0,"brand":{"id":"solid01","name":"Other"}}' "$B/api/brands.php")"
+R2=$(BR '{"action":"save","base_version":1,"brand":{"id":"solid01","name":"Solid Semi","notes":"v2","colors":[],"logos":[],"fonts":[],"rules":{}}}'); ok "update with the current version" 2 "$(echo "$R2" | jget version)"
+R3=$(BR '{"action":"save","base_version":1,"brand":{"id":"solid01","name":"Solid Semi","notes":"stale","colors":[]}}'); ok "update from a stale version is refused with the newer copy" v2 "$(echo "$R3" | jget current.brand.notes)"
+ok "everyone sees the saved brand" "Solid Semi:2" "$(curl -s -b "$J" "$B/api/brands.php" | python3 -c 'import sys,json;b=json.load(sys.stdin)["brands"][0];print(b["brand"]["name"]+":"+str(b["version"]))')"
+ok "bad brand id refused" 400 "$(curl -s -o /dev/null -w '%{http_code}' -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"action":"save","base_version":0,"brand":{"id":"x","name":"N"}}' "$B/api/brands.php")"
+python3 -c "import json;print(json.dumps({'action':'save','base_version':0,'brand':{'id':'bigone1','name':'Big','logos':[{'data':'data:image/png;base64,'+'A'*250000}]}}))" > "$T/big.json"
+ok "brand with huge inline file refused (upload to Zoho first)" 413 "$(curl -s -o /dev/null -w '%{http_code}' -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' --data-binary @"$T/big.json" "$B/api/brands.php")"
+ok "admin can delete a brand" 200 "$(curl -s -o /dev/null -w '%{http_code}' -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"action":"delete","id":"solid01"}' "$B/api/brands.php")"
+R4=$(BR '{"action":"save","base_version":0,"brand":{"id":"solid01","name":"Solid Semi","colors":[]}}'); ok "re-create after delete (for the designer checks)" 1 "$(echo "$R4" | jget version)"
 curl -s -b "$J" "$B/api/download.php?id=$FID" -o "$T/dl.jpg"; ok "download returns the stored (compressed) bytes" "$(echo "$U" | jget stored_bytes)" "$(wc -c < "$T/dl.jpg" | tr -d ' ')"
 ok "download of a file outside LatchHub -> 403" 403 "$(code "$B/api/download.php?id=SECRETFILE001")"
 ok "download with bad id -> 400" 400 "$(code "$B/api/download.php?id=../../etc/passwd")"
@@ -80,6 +93,13 @@ R=$(curl -s -b "$T/cj2" -c "$T/cj2" -X POST -H 'Content-Type: application/json' 
 ok "designer blocked from health -> 403" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" "$B/api/health.php")"
 ok "designer blocked from user list -> 403" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" "$B/api/users.php")"
 ok "designer can list files" 200 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" "$B/api/files.php?client=cli0001")"
+CS2=$(echo "$R" | jget csrf)
+ok "designer sees the shared brand" 1 "$(curl -s -b "$T/cj2" "$B/api/brands.php" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["brands"]))')"
+ok "designer can save a brand" 200 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" -H "X-LH-CSRF: $CS2" -X POST -H 'Content-Type: application/json' -d '{"action":"save","base_version":1,"brand":{"id":"solid01","name":"Solid Semi","notes":"by designer"}}' "$B/api/brands.php")"
+ok "designer cannot delete a brand" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" -H "X-LH-CSRF: $CS2" -X POST -H 'Content-Type: application/json' -d '{"action":"delete","id":"solid01"}' "$B/api/brands.php")"
+ok "a downloaded file is cached on disk" 1 "$([ -f "$T/lh-cache/$FID" ] && echo 1 || echo 0)"
+kill $P1 2>/dev/null; sleep 1
+curl -s -b "$T/cj2" "$B/api/download.php?id=$FID" -o "$T/dl2.jpg" -w ''; ok "cached file is still served when Zoho is unreachable" "$(echo "$U" | jget stored_bytes)" "$(wc -c < "$T/dl2.jpg" | tr -d ' ')"
 echo "before the database is configured"
 T2=$(mktemp -d); mkdir -p "$T2/public_html"; cp "$ROOT/index.php" "$T2/public_html/"; cp -R "$ROOT/api" "$T2/public_html/api"; printf '<!doctype html><body>APP-MARKER</body>' > "$T2/public_html/index.html"
 $PHP -S 127.0.0.1:8903 -t "$T2/public_html" >/dev/null 2>&1 & P3=$!; sleep 1

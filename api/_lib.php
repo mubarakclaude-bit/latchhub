@@ -60,6 +60,7 @@ function ensure_schema(): void {
   $x->exec("CREATE TABLE IF NOT EXISTS lh_attempts (id $pk, ip VARCHAR(64) NOT NULL, email VARCHAR(190) NOT NULL, ts INT NOT NULL" . $ix('ip') . $ix('email') . ")$tail");
   $x->exec("CREATE TABLE IF NOT EXISTS lh_kv (k VARCHAR(40) PRIMARY KEY, v TEXT NOT NULL, exp INT NOT NULL)$tail");
   $x->exec("CREATE TABLE IF NOT EXISTS lh_folders (client_key VARCHAR(40) PRIMARY KEY, zoho_id VARCHAR(80) NOT NULL, name VARCHAR(120) NOT NULL)$tail");
+  $x->exec("CREATE TABLE IF NOT EXISTS lh_brands (id VARCHAR(40) PRIMARY KEY, name VARCHAR(190) NOT NULL, json LONGTEXT NOT NULL, version INT NOT NULL DEFAULT 1, updated_by INT NOT NULL DEFAULT 0, updated_at DATETIME NOT NULL)$tail");
   $x->exec("CREATE TABLE IF NOT EXISTS lh_files (id $pk, zoho_id VARCHAR(80) NOT NULL, client_key VARCHAR(40) NOT NULL, name VARCHAR(255) NOT NULL, bytes BIGINT NOT NULL, orig_bytes BIGINT NOT NULL, method VARCHAR(40) NOT NULL, user_id INT NOT NULL, created_at DATETIME NOT NULL" . $ix('client_key') . ")$tail");
 }
 
