@@ -5,6 +5,10 @@ DirectoryIndex index.php index.html
   # the login gate is index.php – don't let people open the app file directly
   RewriteRule ^index\.html$ index.php [L]
 </IfModule>
+# Hostinger serves .mjs as text/plain, which browsers refuse for ES modules (breaks the PDF reader in Smart import)
+<IfModule mod_mime.c>
+  AddType text/javascript .mjs
+</IfModule>
 <FilesMatch "^(lh-config.*\.php|.*\.sql|\.env.*|\.ftp-deploy.*)$">
   Require all denied
 </FilesMatch>
