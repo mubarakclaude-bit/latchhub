@@ -1,4 +1,4 @@
 Options -Indexes
-<FilesMatch "^(lh-config.*\.php|.*\.sql|\.env.*)$">
+<FilesMatch "^(lh-config.*\.php|.*\.sql|\.env.*|\.ftp-deploy.*)$">
   Require all denied
 </FilesMatch>
