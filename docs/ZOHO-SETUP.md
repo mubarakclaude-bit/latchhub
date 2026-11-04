@@ -37,3 +37,11 @@ Open `https://YOUR-DOMAIN/admin.html`, sign in, press **Run health check**. Ever
 
 ## Automated tests (for developers)
 `PHP=/path/to/php bash tests/run-tests.sh` starts a fake Zoho and a copy of the site, then checks sign-in, permissions, compression, upload, listing and download. It never touches real Zoho.
+
+## Moving the existing client files into Zoho
+After the health check is green, on your Mac (needs Python 3 and curl, both already on macOS):
+```
+python3 tools/migrate_to_zoho.py --dry-run     # shows what would go where, sends nothing
+python3 tools/migrate_to_zoho.py               # asks for your admin email + password (hidden), then uploads
+```
+Result in WorkDrive: `LatchHub / <Client> / Brand assets / <group> / file` and `LatchHub / <Client> / Original files / …`. Safe to run again – finished files are remembered and skipped. Use `--only Kaynes` for a single client. If a file fails with a message about the server upload limit, raise `upload_max_filesize` and `post_max_size` in hPanel → PHP Configuration and run it again.

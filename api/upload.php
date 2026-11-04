@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 /*
- POST multipart: client (brand id), client_name, kind, file
+ POST multipart: client (brand id), client_name, kind, file, and optionally folder (e.g. "Brand assets/Logos", created inside the client folder)
    kind = creative  → images are shrunk (max 2560 px, JPEG q82; PNG with transparency stays PNG)
    kind = auto      → images AND PDFs are compressed (default)
    kind = asset     → stored exactly as sent (logo masters, fonts, source files)
@@ -24,7 +24,7 @@ $maxMb = (int)($cfg['max_upload_mb'] ?? 200);
 if ($f['size'] > $maxMb * 1048576) out(413, ['error' => 'File is larger than ' . $maxMb . ' MB.']);
 $orig = safe_name(basename((string)$f['name']));
 $ext = strtolower(pathinfo($orig, PATHINFO_EXTENSION));
-$allowed = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'pdf', 'ai', 'eps', 'psd', 'indd', 'zip', 'mp4', 'mov', 'ttf', 'otf', 'woff', 'woff2', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'csv', 'txt'];
+$allowed = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'pdf', 'ai', 'eps', 'psd', 'indd', 'zip', 'mp4', 'm4v', 'mov', 'ttf', 'otf', 'woff', 'woff2', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'csv', 'txt'];
 if (!in_array($ext, $allowed, true)) out(415, ['error' => 'File type ".' . $ext . '" is not allowed.']);
 $tmp = $f['tmp_name'];
 if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true) && !@getimagesize($tmp)) out(415, ['error' => 'That image could not be read.']);
@@ -42,6 +42,8 @@ $bytes = (int)filesize($send);
 
 /* send to the client's Zoho folder */
 $folder = client_folder($key, (string)($_POST['client_name'] ?? $key), true);
+$subPath = trim((string)($_POST['folder'] ?? ''));
+if ($subPath !== '') $folder = ensure_path($folder, $subPath, true);
 $z = $cfg['zoho'];
 $resp = null;
 for ($try = 0; $try < 2 && !$resp; $try++) {

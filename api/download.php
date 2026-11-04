@@ -12,7 +12,7 @@ if ($s !== 200) out(404, ['error' => 'File not found.']);
 if (!is_under_root($id)) out(403, ['error' => 'That file is outside the LatchHub folder.']);
 $name = safe_name((string)($info['data']['attributes']['name'] ?? 'download'), 'download');
 $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-$types = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif', 'svg' => 'image/svg+xml', 'pdf' => 'application/pdf', 'mp4' => 'video/mp4', 'mov' => 'video/quicktime'];
+$types = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif', 'svg' => 'image/svg+xml', 'pdf' => 'application/pdf', 'mp4' => 'video/mp4', 'm4v' => 'video/mp4', 'mov' => 'video/quicktime'];
 $inline = isset($types[$ext]) && empty($_GET['dl']);
 $ctype = $types[$ext] ?? 'application/octet-stream';
 $url = rtrim(cfg()['zoho']['download'], '/') . '/' . rawurlencode($id);

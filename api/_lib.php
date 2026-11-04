@@ -169,6 +169,12 @@ function safe_name(string $n, string $fallback = 'file'): string {
   if (function_exists('mb_substr')) $n = mb_substr($n, 0, 120); else $n = substr($n, 0, 120);
   return $n === '' ? $fallback : $n;
 }
+function create_folder(string $parentId, string $name): string {
+  [$s, $j, $raw] = zoho_api('POST', '/files', ['data' => ['attributes' => ['parent_id' => $parentId, 'name' => $name], 'type' => 'files']]);
+  $id = pick_id($j);
+  if (!in_array($s, [200, 201], true) || !$id) { error_log('LatchHub create folder: ' . substr($raw, 0, 300)); out(502, ['error' => 'Could not create the folder in Zoho.', 'status' => $s]); }
+  return $id;
+}
 function client_folder(string $key, string $name, bool $create = true): ?string {
   $st = db()->prepare('SELECT zoho_id FROM lh_folders WHERE client_key=?');
   $st->execute([$key]);
@@ -177,11 +183,27 @@ function client_folder(string $key, string $name, bool $create = true): ?string 
   $fname = safe_name($name, $key);
   foreach (zoho_list($root) as $it) { if ($it['folder'] && strcasecmp($it['name'], $fname) === 0) { db()->prepare('REPLACE INTO lh_folders (client_key,zoho_id,name) VALUES (?,?,?)')->execute([$key, $it['id'], $fname]); return $it['id']; } }
   if (!$create) return null;
-  [$s, $j, $raw] = zoho_api('POST', '/files', ['data' => ['attributes' => ['parent_id' => $root, 'name' => $fname], 'type' => 'files']]);
-  $id = pick_id($j);
-  if (!in_array($s, [200, 201], true) || !$id) { error_log('LatchHub create folder: ' . substr($raw, 0, 300)); out(502, ['error' => 'Could not create the client folder in Zoho.', 'status' => $s]); }
+  $id = create_folder($root, $fname);
   db()->prepare('REPLACE INTO lh_folders (client_key,zoho_id,name) VALUES (?,?,?)')->execute([$key, $id, $fname]);
   return $id;
+}
+/* "Brand assets/Logos" -> the (nested) folder inside $parentId, created on the way when $create is true */
+function ensure_path(string $parentId, string $path, bool $create = true): ?string {
+  $segs = array_values(array_filter(array_map(fn($x) => safe_name($x, ''), explode('/', str_replace('\\', '/', $path))), fn($x) => $x !== ''));
+  if (count($segs) > 4) out(400, ['error' => 'Folder path is too deep (4 levels at most).']);
+  $cur = $parentId;
+  foreach ($segs as $seg) {
+    $key = 'p' . substr(md5($cur . '/' . strtolower($seg)), 0, 32);
+    $st = db()->prepare('SELECT zoho_id FROM lh_folders WHERE client_key=?');
+    $st->execute([$key]);
+    if ($r = $st->fetch()) { $cur = $r['zoho_id']; continue; }
+    $found = null;
+    foreach (zoho_list($cur) as $it) { if ($it['folder'] && strcasecmp($it['name'], $seg) === 0) { $found = $it['id']; break; } }
+    if (!$found) { if (!$create) return null; $found = create_folder($cur, $seg); }
+    db()->prepare('REPLACE INTO lh_folders (client_key,zoho_id,name) VALUES (?,?,?)')->execute([$key, $found, $seg]);
+    $cur = $found;
+  }
+  return $cur;
 }
 /* a file may only be served if it sits somewhere under the LatchHub root folder */
 function is_under_root(string $fileId): bool {
