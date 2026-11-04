@@ -144,12 +144,13 @@ button.logo{border:0;background:none;cursor:pointer;color:inherit;text-align:lef
 .igen{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}.igc{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel);display:flex;flex-direction:column;gap:8px;padding-bottom:10px}.igc input,.igc button{margin:0 10px}.igp{aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;padding:22px}.igp svg{width:100%;height:100%}.igchips{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px}
 @media(max-width:860px){#app{grid-template-columns:1fr}aside{position:static;height:auto;flex-direction:row;overflow:auto;padding:10px;gap:6px;border-right:0;border-bottom:1px solid var(--line)}.sec,.sp,.logo,.tree .dots{display:none}.tree{margin:0;border:0;display:flex}.nav{width:auto;flex:none}.nav.on:before{display:none}.nav.child{padding:6px 8px;border-radius:8px}.nav.child:after{display:none}.nav .dots,.nav .cnt{display:none}main{padding:16px 14px 60px}.hero{padding:24px;min-height:0}.res{grid-template-columns:1fr}}
 </style>
+<link rel="stylesheet" href="css/flat.css?v=1">
 </head>
 <body>
 <div id="app"></div>
 <div class="toast" id="toast"></div>
 <script src="js/icons.js?v=28"></script>
-<script src="js/extra.js?v=28"></script>
+<script src="js/extra.js?v=29"></script>
 <script src="js/import.js?v=30"></script><script src="js/pdftools.js?v=4"></script><script src="js/variants.js?v=3"></script>
 <script src="js/lens.js?v=38"></script><script src="js/lens2.js?v=9"></script><script src="js/sync.js?v=1"></script>
 <script>
@@ -387,6 +388,7 @@ function render(){
    <div class="row" style="margin:0 8px"><button class="btn sm" data-a="export">Backup</button><button class="btn sm" data-a="import">Restore</button><input type="file" id="imp" accept=".json" hidden></div>
   </aside><main class="${enter}" style="--brand:${hex}">${DEMO?'<div style="margin-bottom:14px"><span class="badge b-warn">DEMO MODE – sample clients only; your real data is untouched</span></div>':''}${ui.view==='home'?viewHome():ui.view==='check'?viewCheck():(b?viewBrand(b):viewEmpty())}</main>`;
   if(enter)window.scrollTo(0,0);
+  if(ui.view==='home'&&typeof homeLogos==='function')homeLogos();
   const imp=$('#imp');if(imp)imp.onchange=async e=>{try{const j=JSON.parse(await e.target.files[0].text());if(!j.brands)throw 0;S=j;S.brands.forEach(b=>b.fonts.forEach(f=>f.file&&registerFont(f)));save();ui.brandId=S.brands[0]?.id;ui.anim=true;render();toast('Restored')}catch{toast('Not a valid backup file')}};
 }
 function viewEmpty(){return`<div class="empty"><h2>No clients yet</h2><p>Turn on <b>Edit mode</b> to add a client, or restore your backup.</p><button class="btn pri" data-a="demo">Load demo clients</button></div>`}
@@ -559,7 +561,7 @@ document.addEventListener('click',async e=>{
   else return;
   save();render();
 });
-document.addEventListener('input',e=>{if(e.target.id==='hsearch'){const q=e.target.value.trim().toLowerCase();let n=0;document.querySelectorAll('.hc').forEach(c=>{const ok=!q||c.dataset.name.includes(q);c.style.display=ok?'':'none';if(ok)n++});$('#hcount').textContent=n+' clients'}});
+document.addEventListener('input',e=>{if(e.target.id==='hsearch'){const q=e.target.value.trim().toLowerCase();let n=0;document.querySelectorAll('.hx').forEach(c=>{const ok=!q||c.dataset.name.includes(q);c.style.display=ok?'':'none';if(ok)n++});$('#hcount').textContent=n+' clients'}});
 document.addEventListener('change',async e=>{
   const t=e.target,c=t.dataset.c,b=brand();
   if(c==='edit'){ui.edit=t.checked;render()}

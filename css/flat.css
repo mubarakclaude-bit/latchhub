@@ -1,0 +1,98 @@
+/* LatchHub – flat / square / minimal skin. Loaded after the base styles; markup and sections are unchanged. */
+:root{--mp:clamp(18px,4vw,56px);--bg:#fff;--panel:#fff;--line:#dcdcd8;--line2:#c9c9c5;--alt:#f1f1ef;--red:#ff4b2b;--mute:#7c7c79}
+:root[data-theme=dark]{--bg:#0b0b0b;--panel:#0b0b0b;--line:#262626;--line2:#3a3a3a;--alt:#141414}
+@media (prefers-color-scheme:dark){:root:not([data-theme]){--bg:#0b0b0b;--panel:#0b0b0b;--line:#262626;--line2:#3a3a3a;--alt:#141414}}
+*,*:before,*:after{border-radius:0!important}
+body{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;letter-spacing:0}
+.dots i,.lh-mark{border-radius:0}
+/* sidebar */
+aside{padding:22px 12px;border-right:1px solid var(--ink)}
+.logo{font-weight:600;font-size:15px}
+.sec{letter-spacing:.14em;font-weight:500}
+.nav{padding:7px 8px}.nav.on{background:none;box-shadow:none}.nav.on .nm{text-decoration:underline;text-underline-offset:4px;text-decoration-color:var(--red);text-decoration-thickness:2px}
+.nav.on:before{background:var(--red)}
+.nav .th{border:1px solid var(--line);background:var(--bg)}
+.nav .cnt{border:0;color:var(--mute)}
+.seg{border-color:var(--ink)}.seg button{text-transform:uppercase;letter-spacing:.07em;font-size:10.5px}
+/* buttons / inputs */
+.btn{text-transform:uppercase;letter-spacing:.08em;font-size:11px;font-weight:500;padding:9px 15px;border-color:var(--ink);background:transparent}
+.btn.sm{padding:5px 10px;font-size:10.5px}.btn.pri{background:var(--ink);color:var(--bg)}.btn.del{color:var(--fail);border-color:var(--fail)}
+.btn:hover{background:var(--ink);color:var(--bg)}.btn.del:hover{background:var(--fail);color:#fff}
+input[type=text],input[type=number],select,textarea{border-color:var(--line2);background:transparent}
+.form{border:1px dashed var(--line2);background:none}
+/* main: full-bleed bands */
+main{max-width:none;padding:28px var(--mp) 90px!important}
+@media(max-width:860px){:root{--mp:16px}}
+main{counter-reset:sc}
+/* hero */
+.hero{margin:-28px calc(-1*var(--mp)) 0;padding:72px var(--mp) 52px;min-height:340px;align-items:flex-end}
+.hero .eyebrow{letter-spacing:.14em;font-weight:500}
+.hero h1{font-size:clamp(52px,9vw,140px);line-height:.88;letter-spacing:-.055em;text-transform:uppercase;font-weight:500;overflow-wrap:anywhere}
+.hero p{font-size:16px;max-width:560px}
+.stats span{border:0;border-top:1px solid currentColor;padding:6px 14px 0 0;border-radius:0;font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.hlogo{border:0;width:min(320px,100%);height:180px}
+/* section menu */
+.pills{margin:0 calc(-1*var(--mp));padding:0 var(--mp);counter-reset:pc;top:0;border-bottom:1px solid var(--ink)}
+.pill{counter-increment:pc;text-transform:uppercase;letter-spacing:.09em;font-size:11px;font-weight:500;border-bottom-width:2px}
+.pill:before{content:counter(pc,decimal-leading-zero);margin-right:8px;opacity:.5}
+.pill:hover{border-color:var(--red)}
+/* every part of a brand is its own section */
+main section{counter-increment:sc;margin:0 calc(-1*var(--mp));padding:76px var(--mp) 88px;border-bottom:1px solid var(--line);scroll-margin-top:50px}
+main section:nth-of-type(even){background:var(--alt)}
+main section#s-book{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+main section#s-book .hint,#s-book .muted{color:inherit;opacity:.6}
+#s-book .bookcard{background:transparent;border:0;padding:0}#s-book .bk-ico{background:var(--bg);color:var(--ink)}
+#s-book .btn{background:var(--bg);color:var(--ink);border-color:var(--bg)}#s-book .btn:hover{background:var(--red);color:#fff;border-color:var(--red)}
+.sh{align-items:flex-end;border-top:1px solid var(--ink);padding-top:18px;margin-bottom:44px}
+#s-book .sh{border-color:var(--bg)}
+.sh h3{font-size:clamp(30px,4.6vw,64px);font-weight:500;letter-spacing:-.04em;text-transform:uppercase;line-height:.95}
+.sh h3:before{content:counter(sc,decimal-leading-zero);display:block;font-size:12px;letter-spacing:.05em;font-weight:400;opacity:.45;margin-bottom:12px}
+.hint{text-transform:none;letter-spacing:0;font-size:13px;margin-top:10px;font-weight:400}
+.grp{letter-spacing:.14em;font-weight:500;border-top:1px solid var(--line);padding-top:14px;margin:36px 0 14px}.sh+.grp,.form+.grp{margin-top:0}
+/* grids: gapless, hairline-divided */
+.cgrid{gap:0}.cs{height:210px;border:0;padding:16px 18px}.cs.big{height:320px}.cs:hover{outline:2px solid var(--ink);outline-offset:-2px}
+.cs .cn{font-size:15px}.cs.big .chx{font-size:26px}
+.ct{position:relative}
+.lgrid,.fgrid,.igrid,.ggrid,.fgrid2,.kgrid,.lkgrid{gap:0;border-top:1px solid var(--line);border-left:1px solid var(--line)}
+.lt,.it,.gt,.ft,.kid,.lkw .lk{border:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--panel)}
+.lkw{border:0}.lk{border-bottom:1px solid var(--line)}
+.sq{border-bottom:1px solid var(--line);padding:26px}
+.lbg-dark .sq{background:#141414}
+.fchip{border:0;border-bottom:1px solid var(--ink);padding:0 0 1px;background:none}.fchip:hover{background:none;color:var(--red);border-color:var(--red)}
+.fmts{gap:14px}.lc{padding:14px 16px 10px}
+.fontprev{font-size:clamp(72px,9vw,130px);padding:28px 24px 8px}
+.rules{gap:0;max-width:980px}.rule{background:none;border:0;border-top:1px solid var(--line);padding:20px 4px;font-size:clamp(16px,1.5vw,21px);line-height:1.4}
+.rule i{background:none!important;width:auto;height:auto;font-size:13px;margin-top:4px}
+.kid{min-height:96px}.kth{border:1px solid var(--line)}
+.bookcard{border:1px solid var(--line);background:none}
+.none{border-style:solid;border-color:var(--line)}
+.notes{background:none;border:0;border-top:1px solid var(--line)}
+.addtile{border-style:solid;border-width:0 1px 1px 0;border-color:var(--line)}
+.igp,.gt{background:none}
+#modal .mp{border-color:var(--ink)}
+/* signed-in user chip from the server */
+#lh-user{background:var(--ink)!important;color:var(--bg)!important;box-shadow:none!important;top:0!important;right:0!important;padding:8px 16px!important;letter-spacing:.04em}
+/* ---------- Home: brand index ---------- */
+.home{max-width:none}
+.hhead{padding:34px 0 40px;border:0;align-items:flex-end}
+.hhead .eyebrow{letter-spacing:.14em;font-weight:500}
+.hhead h1{font-size:clamp(56px,10vw,150px);line-height:.86;letter-spacing:-.06em;font-weight:500;text-transform:uppercase}
+.hhead p{font-size:15px}
+.hbar{margin:0 0 14px}.hbar input{max-width:340px;border:0;border-bottom:1px solid var(--ink);padding:9px 0;background:none}.hbar input:focus{outline:0;border-color:var(--red)}
+.hx-h,.hx{display:grid;grid-template-columns:52px 170px minmax(0,1.3fr) minmax(0,1fr) 170px 28px;column-gap:24px;align-items:center}
+.hx-h{border-top:1px solid var(--ink);padding:12px 0;border-bottom:1px solid var(--line);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.hx{width:100%;height:108px;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;cursor:pointer;color:inherit;padding:0;transition:background .15s,color .15s}
+.hx:hover{background:var(--ink);color:var(--bg);box-shadow:-100vw 0 0 var(--ink),100vw 0 0 var(--ink)}
+.hx .no{font-size:12px;color:var(--mute)}
+.hx .hxl{height:60px;display:flex;align-items:center;justify-content:flex-start}
+.hx .hxl img{max-width:100%;max-height:100%;object-fit:contain;object-position:left center;display:block}
+.hx:hover .hxl{background:#fff;padding:0 12px}
+.hx .hxl.ondark{background:#161616;padding:0 12px}
+.hx .hxl .ini{font-size:26px;font-weight:500;width:60px;height:60px;border:1px solid var(--line2);display:flex;align-items:center;justify-content:center}
+.hx .hxn{font-size:clamp(22px,2.7vw,38px);font-weight:500;letter-spacing:-.03em;line-height:1.05}
+.hx .hxn small{display:block;font-size:12px;letter-spacing:0;font-weight:400;color:var(--mute);margin-top:6px}
+.hx:hover .hxn small,.hx:hover .no,.hx:hover .hxc{color:#aaa}
+.hx .strip{display:flex;height:14px}.hx .strip i{flex:1}.hx .strip.none{border:0;padding:0;background:repeating-linear-gradient(90deg,var(--line2) 0 1px,transparent 1px 8px)}
+.hx .hxc{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);line-height:1.6}
+.hx .ar{font-size:20px;text-align:right}.hx:hover .ar{color:var(--red)}
+@media(max-width:860px){.hx-h{display:none}.hx{grid-template-columns:30px 100px 1fr 20px;height:92px;column-gap:12px}.hx .pal,.hx .hxc{display:none}}
