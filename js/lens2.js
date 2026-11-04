@@ -171,3 +171,51 @@ function lensKnowledgeHTML(){const gs=[...new Set(LENS_PRINCIPLES.map(p=>p.g))];
   return`<details class="kb"><summary><b>Design science inside the Lens</b> <span class="muted">(${LENS_PRINCIPLES.length} principles – ${LENS_PRINCIPLES.filter(p=>p.t==='m').length} measured automatically)</span></summary>
   ${gs.map(g=>`<div class="lcat">${esc(g)}</div><div class="kbl">${LENS_PRINCIPLES.filter(p=>p.g===g).map(p=>`<div><b>${esc(p.n)}</b><small>${esc(p.s)}</small><span>${esc(p.u)}</span></div>`).join('')}</div>`).join('')}
   <p class="muted" style="font-size:12px;margin-top:12px">Sources are recalled from the published literature and design-system documentation, not looked up live – verify a citation before quoting it outside the team. <b>Limits:</b> the Lens works from an exported image, so it cannot identify fonts, judge copy or tone, or fully judge photo-led layouts.</p></details>`}
+
+/* ---------- logo verification & corner-mark detection ---------- */
+/* colour-agnostic shape comparison between a region of the creative and a logo image (white/reversed versions still match) */
+function logoShapeScore(canvas,box,img){
+  const iw=img.naturalWidth,ih=img.naturalHeight;if(!iw||!ih||box.w<4||box.h<4)return 0;
+  const w=64,h=Math.max(8,Math.min(160,Math.round(w*box.h/box.w))),pad=8,m=4,W2=w+2*pad,H2=h+2*pad,W3=W2+2*m,H3=H2+2*m;
+  const tc=document.createElement('canvas');tc.width=W2;tc.height=H2;const tx=tc.getContext('2d',{willReadFrequently:true});tx.drawImage(img,pad,pad,w,h);
+  const td=tx.getImageData(0,0,W2,H2).data,T=new Uint8Array(W2*H2);let opq=0,tn=0;
+  for(let y=pad;y<pad+h;y++)for(let x=pad;x<pad+w;x++)if(td[(y*W2+x)*4+3]>250)opq++;
+  const solid=opq>w*h*.97,c0=(pad*W2+pad)*4;
+  for(let y=pad;y<pad+h;y++)for(let x=pad;x<pad+w;x++){const q=(y*W2+x)*4;const on=solid?(Math.abs(td[q]-td[c0])+Math.abs(td[q+1]-td[c0+1])+Math.abs(td[q+2]-td[c0+2]))>90:td[q+3]>128;if(on){T[y*W2+x]=1;tn++}}
+  if(tn<10)return 0;
+  const rc=document.createElement('canvas');rc.width=W3;rc.height=H3;const rx=rc.getContext('2d',{willReadFrequently:true});rx.fillStyle='#fff';rx.fillRect(0,0,W3,H3);
+  rx.drawImage(canvas,box.x-(pad+m)*box.w/w,box.y-(pad+m)*box.h/h,W3*box.w/w,H3*box.h/h,0,0,W3,H3);
+  const rd=rx.getImageData(0,0,W3,H3).data,ring=[[],[],[]];
+  for(let y=0;y<H3;y++)for(let x=0;x<W3;x++){if(x<2||y<2||x>=W3-2||y>=H3-2){const q=(y*W3+x)*4;ring[0].push(rd[q]);ring[1].push(rd[q+1]);ring[2].push(rd[q+2])}}
+  const bg=ring.map(median),R=new Uint8Array(W3*H3);
+  for(let i=0;i<W3*H3;i++){const q=i*4;if(Math.abs(rd[q]-bg[0])+Math.abs(rd[q+1]-bg[1])+Math.abs(rd[q+2]-bg[2])>60)R[i]=1}
+  const blur=(a,W,H)=>{const o=new Float32Array(W*H);for(let y=0;y<H;y++)for(let x=0;x<W;x++){let t=0,n=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const xx=x+dx,yy=y+dy;if(xx>=0&&yy>=0&&xx<W&&yy<H){t+=a[yy*W+xx];n++}}o[y*W+x]=t/n}return o},TB=blur(T,W2,H2),RB=blur(R,W3,H3);
+  let best=-1;
+  for(let sy=-m;sy<=m;sy++)for(let sx=-m;sx<=m;sx++){let sT=0,sR=0,sTT=0,sRR=0,sTR=0,n=0;
+    for(let y=pad;y<pad+h;y++)for(let x=pad;x<pad+w;x++){const a=TB[y*W2+x],b=RB[(y+m+sy)*W3+x+m+sx];sT+=a;sR+=b;sTT+=a*a;sRR+=b*b;sTR+=a*b;n++}
+    const den=(n*sTT-sT*sT)*(n*sRR-sR*sR);if(den<=1e-9)continue;const r=(n*sTR-sT*sR)/Math.sqrt(den);if(r>best)best=r}
+  return Math.max(0,best)}
+/* a compact, self-contained mark sitting in a corner of the creative = probable logo (works on coloured header bands too) */
+function cornerMark(S){
+  if(S.photo)return null;
+  const{W,H,d,sc}=S,ww=Math.round(W*.4),hh=Math.round(H*.14);let best=null;
+  for(const[wx,wy,v,h]of[[0,0,'top','left'],[W-ww,0,'top','right'],[0,H-hh,'bottom','left'],[W-ww,H-hh,'bottom','right']]){
+    const hist=new Map();for(let y=0;y<hh;y++)for(let x=0;x<ww;x++){const q=((wy+y)*W+wx+x)*4,k=(d[q]>>4)<<8|(d[q+1]>>4)<<4|(d[q+2]>>4);let e=hist.get(k);if(!e){e={n:0,r:0,g:0,b:0};hist.set(k,e)}e.n++;e.r+=d[q];e.g+=d[q+1];e.b+=d[q+2]}
+    const dom=[...hist.values()].sort((a,b)=>b.n-a.n)[0],bg=[dom.r/dom.n,dom.g/dom.n,dom.b/dom.n],m=new Uint8Array(ww*hh);let cnt=0;
+    for(let y=0;y<hh;y++)for(let x=0;x<ww;x++){const q=((wy+y)*W+wx+x)*4;if(Math.abs(d[q]-bg[0])+Math.abs(d[q+1]-bg[1])+Math.abs(d[q+2]-bg[2])>70){m[y*ww+x]=1;cnt++}}
+    if(cnt<25||cnt>ww*hh*.45)continue;
+    const comps=labelComps(dilate(m,ww,hh,Math.max(2,Math.round(ww*.025)),Math.max(2,Math.round(hh*.05))),ww,hh);let x0=ww,y0=hh,x1=-1,y1=-1,ink=0;
+    for(const cp of comps){let a0=ww,b0=hh,a1=-1,b1=-1,ci=0;for(const p of cp.pix){if(!m[p])continue;const px=p%ww,py=(p-px)/ww;if(px<a0)a0=px;if(px>a1)a1=px;if(py<b0)b0=py;if(py>b1)b1=py;ci++}
+      if(ci<12)continue;if((h==='left'?a1>=ww-2:a0<=1)||(v==='top'?b1>=hh-2:b0<=1))continue;
+      x0=Math.min(x0,a0);y0=Math.min(y0,b0);x1=Math.max(x1,a1);y1=Math.max(y1,b1);ink+=ci}
+    if(x1<0)continue;const bw=x1-x0+1,bh=y1-y0+1;if(bw>W*.38||bw<W*.03||bh<H*.006)continue;
+    if(!best||ink>best.ink)best={ink,where:v+'-'+h,box:{x:(wx+x0)/sc,y:(wy+y0)/sc,w:bw/sc,h:bh/sc}}}
+  return best}
+/* is this creative actually another client's? (chromatic area explained by each palette) */
+function lensPaletteFit(col,brand){const pal=(brand.colors||[]).map(c=>{const lab=labOfHex(c.hex);return{...c,rgb:hexToRgb(c.hex),lab,chroma:Math.hypot(lab[1],lab[2])}});if(pal.length<2)return null;
+  const tol=+(brand.rules||{}).tol||6;let a=0,t=0;for(const c of col.clusters){if(Math.hypot(c.lab[1],c.lab[2])<14||c.lab[0]>90||c.lab[0]<12)continue;t+=c.pct;const r=relateColour(c,pal,tol,false);if((r.kind==='match'||r.kind==='tint'||r.kind==='near')&&!r.loose)a+=c.pct}
+  return t>=.12?a/t:null}
+function lensClientMismatch(brand,col,items){
+  const mine=lensPaletteFit(col,brand);if(mine==null||mine>.3)return;
+  const rel=b=>b.id===brand.id||b.parent===brand.id||b.id===brand.parent||(b.parent&&b.parent===brand.parent),best=S.brands.filter(b=>!rel(b)).map(b=>({b,f:lensPaletteFit(col,b)})).filter(x=>x.f!=null).sort((a,b)=>b.f-a.f)[0];
+  if(best&&best.f>=.7&&best.f-mine>=.45)items.push({cat:'Brand fit',level:'fail',title:'This looks like a '+best.b.name+' creative, not '+brand.name,detail:'Only '+Math.round(mine*100)+'% of its coloured area belongs to '+brand.name+'\'s palette, but '+Math.round(best.f*100)+'% matches '+best.b.name+'. The rest of this report compares it with the wrong brand.',fix:'Switch the Client dropdown to '+best.b.name+' and run the check again.'})}

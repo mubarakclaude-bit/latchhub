@@ -98,8 +98,10 @@ function lensLogoList(brand){
 function lensClearSpace(S,box,rules,items,marks,fmt){
   const sc=S.sc,{W,H}=S;let bx0=box.x*sc,by0=box.y*sc,bx1=(box.x+box.w)*sc,by1=(box.y+box.h)*sc,lw=bx1-bx0,lh=by1-by0;const o=v=>Math.round(v/sc);
   const reqH=rules.clear!=null&&rules.clear!==''?+rules.clear:(rules.clearW?0:.4);let C=Math.max(reqH*lh,(+rules.clearW||0)*lw);
+  /* 'other content' = anything that differs from the colour right around the logo (so a coloured header band is background, not a neighbour) */
+  const rb=S.photo?null:ringColour(S,{x0:bx0,y0:by0,x1:bx1,y1:by1}),isInk=(x,y)=>{if(!rb)return S.ink[y*W+x];const q=(y*W+x)*4,d=S.d;return Math.abs(d[q]-rb[0])+Math.abs(d[q+1]-rb[1])+Math.abs(d[q+2]-rb[2])>70};
   if(!S.photo){let ex0=bx0,ey0=by0,ex1=bx1,ey1=by1;const gapH=Math.max(3,Math.max(lw,lh)*.16),gapV=Math.max(2,Math.min(lw,lh)*.05),maxW=lw*4.2,maxH=lh*1.4;
-    for(let it=0;it<3;it++){let n0=ex0,m0=ey0,n1=ex1,m1=ey1;for(let y=Math.max(0,Math.floor(ey0-gapV));y<Math.min(H,Math.ceil(ey1+gapV));y++)for(let x=Math.max(0,Math.floor(ex0-gapH));x<Math.min(W,Math.ceil(ex1+gapH));x++){if(!S.ink[y*W+x])continue;if(x<n0)n0=x;if(x>n1)n1=x;if(y<m0)m0=y;if(y>m1)m1=y}
+    for(let it=0;it<3;it++){let n0=ex0,m0=ey0,n1=ex1,m1=ey1;for(let y=Math.max(0,Math.floor(ey0-gapV));y<Math.min(H,Math.ceil(ey1+gapV));y++)for(let x=Math.max(0,Math.floor(ex0-gapH));x<Math.min(W,Math.ceil(ex1+gapH));x++){if(!isInk(x,y))continue;if(x<n0)n0=x;if(x>n1)n1=x;if(y<m0)m0=y;if(y>m1)m1=y}
       if(n1-n0>maxW||m1-m0>maxH)break;ex0=n0;ey0=m0;ex1=n1;ey1=m1}
     bx0=ex0;by0=ey0;bx1=ex1;by1=ey1;lw=bx1-bx0;lh=by1-by0;C=Math.max(reqH*lh,(+rules.clearW||0)*lw)}
   /* where the logo sits: corner, equal top/side margins */
@@ -107,7 +109,7 @@ function lensClearSpace(S,box,rules,items,marks,fmt){
   const out={x0:bx0,y0:by0,x1:bx1,y1:by1};
   if(S.photo){items.push({cat:'Logo',level:'info',title:'Clear space – busy background',detail:'The logo sits on a photo or textured area, so spacing cannot be measured reliably. Keep roughly '+o(C)+' px of calm space around it.',hl:[{x:bx0/W,y:by0/H,w:lw/W,h:lh/H}]});return out}
   const pad=Math.max(lw,lh)*.07,{ink}=S;let minD=1e9,np=null,vx0=1e9,vy0=1e9,vx1=-1,vy1=-1;
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){if(!ink[y*W+x])continue;if(x>bx0-pad&&x<bx1+pad&&y>by0-pad&&y<by1+pad)continue;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){if(!isInk(x,y))continue;if(x>bx0-pad&&x<bx1+pad&&y>by0-pad&&y<by1+pad)continue;
     const dx=Math.max(bx0-x,x-bx1,0),dy=Math.max(by0-y,y-by1,0),dd=Math.max(dx,dy);if(dd<minD){minD=dd;np=[x,y]}if(dd<C){if(x<vx0)vx0=x;if(y<vy0)vy0=y;if(x>vx1)vx1=x;if(y>vy1)vy1=y}}
   const ratio=minD/C,zone={t:'rect',x:(bx0-C)/W,y:(by0-C)/H,w:(lw+2*C)/W,h:(lh+2*C)/H,c:ratio>=1?'#22c55e':'#ef4444',dash:1};marks.push(zone);
   const side=np?(np[1]>by1?'below':np[1]<by0?'above':np[0]>bx1?'to the right of':'to the left of'):'',logoR={x:bx0/W,y:by0/H,w:lw/W,h:lh/H,k:'ok'};
@@ -137,7 +139,7 @@ function lensLayout(S,comps,fmt,logoBox,items,marks,feat,brand){
   if(!body.length){items.push({cat:'Composition',level:'info',title:'Nothing to measure',detail:'The creative is a single image/background with no separate elements.'});return}
   const content=body.filter(c=>!c.full),minM=fmt.margin*short;
   /* margins */
-  if(content.length){const L=Math.min(...content.map(c=>c.x0)),R=W-Math.max(...content.map(c=>c.x1)),T=Math.min(...body.map(c=>c.y0)),B=H-Math.max(...body.map(c=>c.y1));
+  if(content.length){const L=Math.min(...content.map(c=>c.x0)),R=W-Math.max(...content.map(c=>c.x1)),tb=body.filter(c=>!(c.full||((c.y0<=1||c.y1>=H-1)&&c.w>W*.5))),T=Math.min(...(tb.length?tb:body).map(c=>c.y0)),B=H-Math.max(...(tb.length?tb:body).map(c=>c.y1));
     const sides=[['left',L],['right',R],['top',T],['bottom',B]].filter(([,v])=>v<minM);
     sides.forEach(([n,v])=>items.push({cat:'Spacing',level:v<minM*.45?'fail':'warn',title:'Content is very close to the '+n+' edge',detail:'Nearest element is '+o(v)+' px from the '+n+' edge; this format needs about '+o(minM)+' px ('+Math.round(fmt.margin*100)+'% of the short side).',fix:'Pull everything inside a '+px8(minM,sc)+' px margin.',hl:[strip(n,minM),...intr(n,minM)],ref:'Safe margins (Material / Apple HIG): ~4.5% of the short side'}));
     if(Math.abs(L-R)>W*.035&&L>=minM*.6&&R>=minM*.6)items.push({cat:'Spacing',level:'warn',title:'Left and right margins are uneven',detail:'Left margin '+o(L)+' px vs right margin '+o(R)+' px.',fix:'Set both to '+px8((L+R)/2,sc)+' px so the layout sits square on the canvas.',hl:[RRm(0,0,L,H,'ref'),RRm(W-R,0,W,H,'ref')]});
@@ -153,7 +155,7 @@ function lensLayout(S,comps,fmt,logoBox,items,marks,feat,brand){
   const group=(arr,key)=>{const s=[...arr].sort((a,b)=>a[key]-b[key]),gs=[];let cur=[];s.forEach(c=>{if(cur.length&&c[key]-cur[cur.length-1][key]>loose){gs.push(cur);cur=[]}cur.push(c)});if(cur.length)gs.push(cur);return gs.filter(g=>g.length>=2)};
   let misaligned=0,aligned=0;
   const cdev=cand.map(c=>({c,dev:Math.abs(c.cx-W/2)})).filter(x=>x.dev<=loose&&x.c.w>W*.08),edgeCand=cdev.length>=2?cand.filter(c=>!cdev.some(x=>x.c===c)):cand;
-  [['x0','left'],['x1','right']].forEach(([k,name])=>group(edgeCand,k).forEach(g=>{const v=g.map(c=>c[k]),sp=Math.max(...v)-Math.min(...v);
+  [['x0','left'],['x1','right']].forEach(([k,name])=>group(edgeCand,k).forEach(g=>{if(k==='x1'&&Math.max(...g.map(c=>c.x0))-Math.min(...g.map(c=>c.x0))<=loose)return;const v=g.map(c=>c[k]),sp=Math.max(...v)-Math.min(...v);
     if(sp<=tight)aligned++;else{misaligned++;const tx=Math.round(median(v));g.forEach(c=>mv(c.x0,c.y0,c.x1,c.y1,'#f59e0b'));marks.push({t:'vline',x:tx/W,c:'#f59e0b'});
       items.push({cat:'Alignment',level:sp>loose*.6?'fail':'warn',title:g.length+' elements are almost '+name+'-aligned but off by '+o(sp)+' px',detail:'Their '+name+' edges sit between x='+o(Math.min(...v))+' and x='+o(Math.max(...v))+' px.',fix:'Snap all '+name+' edges to x='+o(tx)+' px (use Align in your design tool, not nudging by eye).',hl:g.map(RCm),ref:'Gestalt continuity & common region (Wertheimer)'})}}));
   if(cdev.length){const mx=Math.max(...cdev.map(x=>x.dev));if(mx>tight&&(cdev.length>=2||cdev[0].c.w>W*.2)){misaligned++;cdev.forEach(x=>mv(x.c.x0,x.c.y0,x.c.x1,x.c.y1,'#f59e0b'));marks.push({t:'vline',x:.5,c:'#f59e0b'});
@@ -214,12 +216,22 @@ async function lensAnalyze(canvas,brand,label){
   if(logos.length){for(const l of logos){try{imgs[l.id]=await loadImg(l.data)}catch{}}
     try{logoRes=await analyzeLogo2(canvas,logos,imgs,brand.rules||{},{complexBg:!S.flat,blob:async()=>{const bl=await blobLogo(canvas,logos,imgs);if(!bl||bl.score<.5)return null;const mn=+(brand.rules||{}).minLogo||0,small=mn&&bl.wPct<mn;return{level:small?'fail':'pass',title:small?'Logo too small':'Logo found',detail:'Recognised as "'+bl.L.name+'" by its colours and proportions, about '+Math.round(bl.box.w)+' px wide = '+bl.wPct.toFixed(1)+'% of the width'+(small?'. Brand rule: logo must be at least '+mn+'% of the width.':'.'),box:bl.box,boxOk:true,fuzzy:true,L:bl.L}}})}catch(e){items.push({cat:'Logo',level:'info',title:'Logo detection failed',detail:e.message})}}
   else items.push({cat:'Logo',level:'info',title:'No logo files to look for',detail:'Add PNG/SVG logos to this client so the lens can check placement and clear space.'});
-  if(logoRes){const lr=logoRes.box?[{x:logoRes.box.x/canvas.width,y:logoRes.box.y/canvas.height,w:logoRes.box.w/canvas.width,h:logoRes.box.h/canvas.height,k:logoRes.boxOk?'ok':undefined}]:undefined;
-    items.push({cat:'Logo',level:logoRes.level,title:logoRes.title,detail:logoRes.detail,fix:logoRes.level==='fail'||logoRes.level==='warn'?'Use the correct, unstretched logo from the Logos section.':'',hl:lr});
-    if(logoRes.box){marks.push({t:'rect',x:logoRes.box.x/canvas.width,y:logoRes.box.y/canvas.height,w:logoRes.box.w/canvas.width,h:logoRes.box.h/canvas.height,c:logoRes.boxOk?'#22c55e':'#f59e0b'});
-      if(logoRes.boxOk){lockup=lensClearSpace(S,logoRes.box,brand.rules||{},items,marks,fmt);
-        /* the logo (and any tagline locked up with it) is not content: remove it from every layout measurement below */
-        const m=2;for(let y=Math.max(0,Math.floor(lockup.y0-m));y<Math.min(S.H,Math.ceil(lockup.y1+m));y++)for(let x=Math.max(0,Math.floor(lockup.x0-m));x<Math.min(S.W,Math.ceil(lockup.x1+m));x++)S.ink[y*S.W+x]=0}}}
+  /* a colour-exact hit on a flat patch is not a logo: confirm the SHAPE too (colour-agnostic, so white/reversed versions still match) */
+  const rules0=brand.rules||{};
+  if(logoRes&&logoRes.box){let F=0;for(const l of logos){if(imgs[l.id])F=Math.max(F,logoShapeScore(canvas,logoRes.box,imgs[l.id]))}logoRes.F=F;
+    if(F<.5)logoRes={level:rules0.requireLogo===false?'info':'fail',title:'Logo not found',detail:'No approved logo variant detected. It may be missing, stretched/distorted, heavily cropped, or drawn in a colour treatment that is not saved for this client.',rejected:true}}
+  /* the logo is usually a corner mark: if nothing matched, treat a compact corner element as the probable logo – never as content */
+  let locBox=logoRes&&logoRes.box?logoRes.box:null,probable=null;
+  if(!locBox){probable=cornerMark(S);if(probable)locBox=probable.box}
+  if(logoRes&&!probable){const lr=logoRes.box?[{x:logoRes.box.x/canvas.width,y:logoRes.box.y/canvas.height,w:logoRes.box.w/canvas.width,h:logoRes.box.h/canvas.height,k:logoRes.boxOk?'ok':undefined}]:undefined;
+    items.push({cat:'Logo',level:logoRes.level,title:logoRes.title,detail:logoRes.detail,fix:logoRes.level==='fail'||logoRes.level==='warn'?'Use the correct, unstretched logo from the Logos section.':'',hl:lr})}
+  if(probable){const hl=[{x:probable.box.x/canvas.width,y:probable.box.y/canvas.height,w:probable.box.w/canvas.width,h:probable.box.h/canvas.height,k:'ok'}];
+    items.push({cat:'Logo',level:logos.length&&rules0.requireLogo!==false?'warn':'info',title:'Logo not matched to an approved file – treated as the logo in the '+probable.where+' corner',detail:'A compact mark sits in the '+probable.where+' corner. It is used for the placement and spacing checks and is kept out of the content analysis, but it could not be matched to any saved logo file – it may be a white/reversed version, another client\'s logo or a partner logo.',fix:'If it is the right logo in a white or one-colour version, add that file under this client\'s Logos so the Lens can verify it exactly.',hl})}
+  if(logoRes&&logoRes.box)marks.push({t:'rect',x:logoRes.box.x/canvas.width,y:logoRes.box.y/canvas.height,w:logoRes.box.w/canvas.width,h:logoRes.box.h/canvas.height,c:logoRes.boxOk?'#22c55e':'#f59e0b'});
+  if(locBox){lockup=lensClearSpace(S,locBox,rules0,items,marks,fmt);
+    /* the logo (and any tagline locked up with it) is not content: remove it from every layout measurement below */
+    const m=2;for(let y=Math.max(0,Math.floor(lockup.y0-m));y<Math.min(S.H,Math.ceil(lockup.y1+m));y++)for(let x=Math.max(0,Math.floor(lockup.x0-m));x<Math.min(S.W,Math.ceil(lockup.x1+m));x++)S.ink[y*S.W+x]=0}
+  try{lensClientMismatch(brand,col,items)}catch(e){console.warn('mismatch',e)}
   try{lensBrandFit(brand,col,S,logoRes,logos,imgs,lockup,feat,items)}catch(e){console.warn('brand fit',e)}
   /* 2) CONTENT – everything except the logo */
   let comps=[];
