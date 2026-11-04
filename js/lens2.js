@@ -4,28 +4,16 @@ const hueName=lab=>{const ch=Math.hypot(lab[1],lab[2]),h=(Math.atan2(lab[2],lab[
   if(lab[0]>92&&ch<12)return'white';if(lab[0]<15)return'black';if(ch<12)return'grey';if(ch<22)return null;
   return h>=15&&h<55?'red':h<82?'orange':h<118?'yellow':h<200?'green':h<235?'cyan':h<305?'blue':h<335?'purple':h<360||h<15?'pink':'pink'};
 
-/* ---------- logo placement: corner, top vs side margin, centring, app-UI zones ---------- */
+/* ---------- logo spacing: edge margin (and, for Stories, the app-UI zones). Correctness and clear space are judged elsewhere. ---------- */
 function lensLogoPlacement(S,b,C,fmt,items){
   const{W,H,sc}=S,o=v=>Math.round(v/sc),short=Math.min(W,H),rr=(x0,y0,x1,y1,k)=>RR_(S,x0,y0,x1,y1,k);
-  const m={left:b.x0,right:W-b.x1,top:b.y0,bottom:H-b.y1},vert=m.top<=m.bottom?'top':'bottom',hor=m.left<=m.right?'left':'right',mv=m[vert],mh=m[hor];
-  const cx=(b.x0+b.x1)/2/W,cy=(b.y0+b.y1)/2/H,nearV=mv<H*.2,nearH=mh<W*.2,logoR=rr(b.x0,b.y0,b.x1,b.y1,'ok');
+  const m={left:b.x0,right:W-b.x1,top:b.y0,bottom:H-b.y1},vert=m.top<=m.bottom?'top':'bottom',logoR=rr(b.x0,b.y0,b.x1,b.y1,'ok');
   const strip=n=>n==='top'?rr(b.x0,0,b.x1,b.y0,'ref'):n==='bottom'?rr(b.x0,b.y1,b.x1,H,'ref'):n==='left'?rr(0,b.y0,b.x0,b.y1,'ref'):rr(b.x1,b.y0,W,b.y1,'ref');
-  const need=Math.max(C*.75,fmt.margin*short*.6),ref='Logo exclusion-zone practice (brand identity guidelines); equal optical margins – Swiss/International style';
-  if(nearV&&nearH){
-    const where=vert+'-'+hor,hl=[logoR,strip(vert),strip(hor)],tight=[[vert,mv],[hor,mh]].filter(([,v])=>v<need);
-    if(tight.length)items.push({cat:'Logo',level:tight.some(([,v])=>v<need*.5)?'fail':'warn',title:'Logo is too close to the '+tight.map(t=>t[0]).join(' and ')+' edge',detail:'It sits in the '+where+' corner: '+vert+' margin '+o(mv)+' px, '+hor+' margin '+o(mh)+' px. At least '+o(need)+' px is needed on each side so platform cropping or print trim cannot clip it.',fix:'Move the logo inwards until both margins are about '+px8(Math.max(need,(mv+mh)/2),sc)+' px.',hl,ref});
-    else if(Math.abs(mv-mh)>Math.max(Math.max(mv,mh)*.2,short*.006))items.push({cat:'Logo',level:'warn',title:'Logo corner margins are uneven – '+vert+' '+o(mv)+' px vs '+hor+' '+o(mh)+' px',detail:'In the '+where+' corner the distance from the top/bottom edge and from the side edge should match, otherwise the logo looks pushed off its corner.',fix:'Use the same distance from both edges – about '+px8((mv+mh)/2,sc)+' px.',hl,ref});
-    else items.push({cat:'Logo',level:'pass',title:'Logo sits correctly in the '+where+' corner',detail:vert+' margin '+o(mv)+' px · '+hor+' margin '+o(mh)+' px – even and above the minimum of '+o(need)+' px.',hl,ref});
-    if(Math.max(mv,mh)>short*.14)items.push({cat:'Logo',level:'info',title:'Logo is a long way from its corner',detail:'Margins of '+o(mv)+' and '+o(mh)+' px are more than 14% of the short side, so it reads as floating rather than anchored.',fix:'Tuck it to about '+px8(Math.max(need,short*.05),sc)+' px from both edges if it should anchor the layout.',hl});
-  }else if(nearV&&Math.abs(cx-.5)<.14){
-    const off=Math.abs(cx-.5)*W;
-    if(mv<need)items.push({cat:'Logo',level:mv<need*.5?'fail':'warn',title:'Logo is too close to the '+vert+' edge',detail:'Centred at the '+vert+' with only '+o(mv)+' px margin; at least '+o(need)+' px is needed.',fix:'Move it inwards by '+o(need-mv)+' px or more.',hl:[logoR,strip(vert)],ref});
-    else if(off>Math.max(2,W*.008))items.push({cat:'Logo',level:'warn',title:'Centred logo is off-centre by '+o(off)+' px',detail:'Left margin '+o(m.left)+' px vs right margin '+o(m.right)+' px.',fix:'Centre it horizontally on x='+o(W/2)+' px.',hl:[logoR,strip('left'),strip('right')],ref});
-    else items.push({cat:'Logo',level:'pass',title:'Logo is centred at the '+vert,detail:vert+' margin '+o(mv)+' px, left and right margins equal.',hl:[logoR],ref});
-  }else if(nearH&&Math.abs(cy-.5)<.14){
-    items.push({cat:'Logo',level:mh<need?'warn':'pass',title:mh<need?'Logo is too close to the '+hor+' edge':'Logo sits on the '+hor+' edge, vertically centred',detail:hor+' margin '+o(mh)+' px (needs '+o(need)+' px).',fix:mh<need?'Move it inwards by '+o(need-mh)+' px or more.':'',hl:[logoR,strip(hor)],ref})
-  }else items.push({cat:'Logo',level:'info',title:'Logo floats inside the layout',detail:'It is '+Math.round(cx*100)+'% from the left and '+Math.round(cy*100)+'% from the top – not anchored to a corner. Social creatives are normally easiest to recognise with the logo fixed in one corner.',fix:'Move it to the same corner used across the client\'s campaign.',hl:[logoR]});
-  if(fmt.safe&&(vert==='top'?m.top<fmt.safe.top*H:m.bottom<fmt.safe.bottom*H)&&nearV){
+  const need=Math.max(C*.75,fmt.margin*short*.6),ref='Logo exclusion-zone practice (brand identity guidelines)';
+  const near=Object.entries(m).filter(([,v])=>v<short*.2).sort((a,b)=>a[1]-b[1]),tight=near.filter(([,v])=>v<need);
+  if(tight.length)items.push({cat:'Logo',level:tight.some(([,v])=>v<need*.5)?'fail':'warn',title:'Logo is too close to the '+tight.map(t=>t[0]).join(' and ')+' edge',detail:'Margin: '+tight.map(([n,v])=>n+' '+o(v)+' px').join(', ')+'. At least '+o(need)+' px is needed so platform cropping or print trim cannot clip it.',fix:'Move the logo inwards until the margin is about '+px8(need,sc)+' px or more.',hl:[logoR,...tight.map(([n])=>strip(n))],ref});
+  else if(near.length)items.push({cat:'Logo',level:'pass',title:'Logo edge spacing is healthy',detail:near.map(([n,v])=>n+' '+o(v)+' px').join(' · ')+' – above the minimum of '+o(need)+' px.',hl:[logoR,...near.map(([n])=>strip(n))],ref});
+  if(fmt.safe&&(vert==='top'?m.top<fmt.safe.top*H:m.bottom<fmt.safe.bottom*H)&&m[vert]<H*.2){
     const z=vert==='top'?rr(0,0,W,fmt.safe.top*H,'ref'):rr(0,H-fmt.safe.bottom*H,W,H,'ref');
     items.push({cat:'Logo',level:'warn',title:'Logo sits under the app interface',detail:'On Stories/Reels the '+vert+' ~'+Math.round(fmt.safe[vert]*100)+'% is covered by profile name, buttons or captions.',fix:'Move the logo '+(vert==='top'?'below y='+o(fmt.safe.top*H):'above y='+o((1-fmt.safe.bottom)*H))+' px.',hl:[logoR,z],ref:'Meta / TikTok / YouTube Shorts safe-zone guidelines'})}}
 
@@ -84,9 +72,9 @@ function logoMean(img){if(_lm.has(img))return _lm.get(img);const iw=img.naturalW
 function ringColour(S,b){const{W,H,d}=S,pad=Math.max(3,Math.round(Math.min(b.x1-b.x0,b.y1-b.y0)*.14)),rs=[],gs=[],bs=[];
   for(let y=Math.max(0,Math.floor(b.y0-pad));y<Math.min(H,Math.ceil(b.y1+pad));y++)for(let x=Math.max(0,Math.floor(b.x0-pad));x<Math.min(W,Math.ceil(b.x1+pad));x++){if(x>=b.x0&&x<b.x1&&y>=b.y0&&y<b.y1)continue;const q=(y*W+x)*4;rs.push(d[q]);gs.push(d[q+1]);bs.push(d[q+2])}
   return rs.length?[median(rs),median(gs),median(bs)]:null}
-function lensBrandFit(brand,col,S,logoRes,logos,imgs,lockup,feat,items){
+function lensBrandFit(brand,col,S,logoRes,logos,imgs,lockup,feat,items,imageMode){
   const rules=brand.rules||{},lines=(rules.notes||'').split('\n').map(x=>x.replace(/^[•\-\s]+/,'').trim()).filter(Boolean),pal=brand.colors||[];
-  /* what we compared against */
+  if(!imageMode){/* what we compared against */
   const roles=[...new Set(pal.map(c=>c.role).filter(Boolean))],bookOn=!!(brand.book&&Object.values(brand.book).some(Boolean));
   const adher=col.clusters.filter(c=>['match','tint','neutral'].includes(c.status)).reduce((s,c)=>s+c.pct,0)/(col.clusters.reduce((s,c)=>s+c.pct,0)||1);
   const manual=lines.filter(l=>!/logo|colou?r|#[0-9a-f]{3,6}|gradient|clear space/i.test(l)).slice(0,4);
@@ -95,7 +83,8 @@ function lensBrandFit(brand,col,S,logoRes,logos,imgs,lockup,feat,items){
   /* palette roles: accents should stay accents */
   col.clusters.filter(c=>c.status==='match'&&c.rel&&c.rel.p&&/accent|highlight/i.test(c.rel.p.role||'')&&c.pct>.3).forEach(c=>
     items.push({cat:'Brand fit',level:'warn',title:c.rel.p.name+' is an accent colour but covers '+Math.round(c.pct*100)+'%',detail:'In this brand\'s palette it is set up as "'+c.rel.p.role+'", meant for highlights rather than large areas.',fix:'Use a Primary or Secondary colour for the large areas and keep '+c.rel.p.name+' under ~15%.',hlColor:c.hex}));
-  /* logo variant vs its background */
+  }
+  /* logo variant vs its background (logo colour) */
   if(logoRes&&logoRes.boxOk&&logoRes.box&&logoRes.L&&lockup){
     const bg=ringColour(S,lockup),L=logoRes.L,m=imgs[L.id]&&logoMean(imgs[L.id]);
     if(bg&&m){const cr=contrastRatio(m,bg),hl=[RR_(S,lockup.x0,lockup.y0,lockup.x1,lockup.y1)];
@@ -144,7 +133,10 @@ document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.tar
 
 /* ---------- the knowledge the Lens is built on ---------- */
 const LENS_PRINCIPLES=[
- {g:'Measured on every creative',t:'m',n:'WCAG 2.1 contrast & non-text contrast',s:'W3C',u:'Text must reach 4.5:1 (3:1 for large text); logos and graphics 3:1. Fix suggestions name a brand colour pairing that passes.'},
+ {g:'Measured on every creative',t:'m',n:'WCAG 2.1 contrast',s:'W3C',u:'Text contrast is offered as a SUGGESTION only (never scored) because real posts trade contrast for mood; the tip names a brand colour pairing that would pass 4.5:1. A logo that blends into its background (under 3:1) is still flagged.'},
+ {g:'Measured on every creative',t:'m',n:'Gradient colour mixing (interpolation spaces)',s:'CSS Color 4; Figma / Photoshop gradient engines; Itten and Albers on colour mixing',u:'A gradient between approved colours creates in-between colours. Any colour lying on the blend path between two (or three) approved colours – in sRGB, linear-light or Lab mixing, as different tools use – is accepted as gradient-derived instead of flagged as off-brand.'},
+ {g:'Measured on every creative',t:'m',n:'Tints, tones and shades',s:'Itten (Bauhaus); Munsell colour system',u:'Tint = colour + white (allowed). Shade = colour + black (not allowed unless black is a brand colour). Used to tell an approved lighter version from a changed colour.'},
+ {g:'Measured on every creative',t:'m',n:'Image-focused designs get a short check-list',s:'Photographic colour cannot be judged against a palette',u:'On photo-led creatives the Lens checks only the logo (correct?, spacing, colour variant) and text spacing and colour; whole-image colour, composition and style are skipped.'},
  {g:'Measured on every creative',t:'m',n:'Colour harmony: mono, analogous, complementary, triadic',s:'Itten (Bauhaus); Albers, Interaction of Color (Yale)',u:'Groups the hues found into families and names the relationship; warns when four or more unrelated hues compete.'},
  {g:'Measured on every creative',t:'m',n:'60-30-10 proportion & isolation effect',s:'Design practice heuristic; Von Restorff (1933)',u:'Checks there is a dominant colour and that the strongest colour stays a small accent so it pops.'},
  {g:'Measured on every creative',t:'m',n:'Feature integration & visual saliency',s:'Treisman & Gelade (1980); Itti, Koch & Niebur (1998); Wolfe, guided search (Harvard)',u:'Weighs each element by size × contrast and warns when two compete for the first glance.'},
@@ -159,6 +151,7 @@ const LENS_PRINCIPLES=[
  {g:'Measured on every creative',t:'m',n:'Whitespace',s:'Swiss/International style; Lidwell et al., Universal Principles of Design',u:'Warns below ~15% open space (crowded) and above ~88% (too sparse to read at thumbnail size).'},
  {g:'Measured on every creative',t:'m',n:'Rule of thirds / golden ratio (heuristic only)',s:'J. T. Smith (1797); classical proportion',u:'Notes when the focal element lands on a power point. Evidence is mixed, so it never costs points.'},
  {g:'Measured on every creative',t:'m',n:'Logo exclusion zone, corner anchoring, equal margins',s:'Brand identity guideline practice',u:'Finds the logo, confirms it is the right variant for its background, anchors it to a corner with equal top/side margins and keeps other content out of its clear space. The logo is never treated as content.'},
+ {g:'Used as advice in the style read',t:'g',n:'Muddy middle & simultaneous contrast',s:'Itten; Albers, Interaction of Color (Yale)',u:'Blending near-complementary colours cancels saturation (a grey middle), and a colour looks different next to another; add a mid-stop or interpolate in OKLCH (Ottosson, 2020).'},
  {g:'Used as advice in the style read',t:'g',n:'Fitts\'s law',s:'Fitts (1954)',u:'Buttons and CTAs should be large and near the end of the reading path.'},
  {g:'Used as advice in the style read',t:'g',n:'Aesthetic–usability effect',s:'Kurosu & Kashimura (Hitachi, 1995)',u:'People judge tidy, well-aligned work as more trustworthy – the reason alignment and spacing count.'},
  {g:'Used as advice in the style read',t:'g',n:'Image memorability',s:'Isola et al. (MIT, 2011); Borkin et al. (Harvard/MIT, 2013)',u:'Distinctive, human-centred visuals and a clear focal subject are remembered; generic stock is not.'},
@@ -219,3 +212,32 @@ function lensClientMismatch(brand,col,items){
   const mine=lensPaletteFit(col,brand);if(mine==null||mine>.3)return;
   const rel=b=>b.id===brand.id||b.parent===brand.id||b.id===brand.parent||(b.parent&&b.parent===brand.parent),best=S.brands.filter(b=>!rel(b)).map(b=>({b,f:lensPaletteFit(col,b)})).filter(x=>x.f!=null).sort((a,b)=>b.f-a.f)[0];
   if(best&&best.f>=.7&&best.f-mine>=.45)items.push({cat:'Brand fit',level:'fail',title:'This looks like a '+best.b.name+' creative, not '+brand.name,detail:'Only '+Math.round(mine*100)+'% of its coloured area belongs to '+brand.name+'\'s palette, but '+Math.round(best.f*100)+'% matches '+best.b.name+'. The rest of this report compares it with the wrong brand.',fix:'Switch the Client dropdown to '+best.b.name+' and run the check again.'})}
+
+/* ---------- gradients: is this colour a blend of approved colours? ---------- */
+function lensBlendMatch(c,pal,tol){
+  const P=pal.slice(0,8),lin=v=>{v/=255;return v<=.04045?v/12.92:Math.pow((v+.055)/1.055,2.4)},delin=v=>255*(v<=.0031308?12.92*v:1.055*Math.pow(v,1/2.4)-.055);
+  if(P.length<2)return null;let best=null;const lim=tol+2;
+  const mix=(cols,w)=>{const a=[0,0,0],b=[0,0,0],cc=[0,0,0];cols.forEach((p,i)=>{for(let k=0;k<3;k++){a[k]+=p.rgb[k]*w[i];b[k]+=lin(p.rgb[k])*w[i];cc[k]+=p.lab[k]*w[i]}});return[rgb2lab(...a),rgb2lab(...b.map(delin)),cc]};
+  const test=(idx,w)=>{for(const lab of mix(idx.map(i=>P[i]),w)){const d=dE(c.lab,lab);if(d<=lim&&(!best||d<best.d)){const main=idx.map((v,k)=>[v,w[k]]).sort((x,y)=>y[1]-x[1]);best={d,na:P[main[0][0]].name,nb:P[main[1][0]].name,t:main[1][1],pc:Math.min(...idx.map(i=>P[i].chroma))}}}};
+  for(let i=0;i<P.length;i++)for(let j=i+1;j<P.length;j++)for(let t=.05;t<.96;t+=.05)test([i,j],[1-t,t]);
+  if(!best&&P.length>=3)for(let i=0;i<P.length;i++)for(let j=i+1;j<P.length;j++)for(let k=j+1;k<P.length;k++)for(let a=.1;a<.9;a+=.1)for(let b=.1;a+b<.95;b+=.1)test([i,j,k],[a,b,1-a-b]);
+  return best}
+/* image-focused designs: find text-like pixels by the colours text is normally set in (brand colours, white, black) */
+function lensTextInk(S,brand){
+  const{W,H,d}=S,N=W*H,names=[...(brand.colors||[]).map(c=>c.name),'white','black'],cands=[...(brand.colors||[]).map(c=>labOfHex(c.hex)),rgb2lab(255,255,255),rgb2lab(0,0,0)],ink=new Uint8Array(N),idx=new Uint8Array(N),memo=new Map();
+  for(let i=0;i<N;i++){const q=i*4,k=(d[q]>>3)<<10|(d[q+1]>>3)<<5|(d[q+2]>>3);let m=memo.get(k);if(m===undefined){const lab=lab5(d[q],d[q+1],d[q+2]);m=0;for(let c=0;c<cands.length;c++)if(dE(lab,cands[c])<9){m=c+1;break}memo.set(k,m)}if(m){ink[i]=1;idx[i]=m}}
+  return{ink,idx,names}}
+
+/* share of neighbouring cells whose colour changes slowly but steadily (a smooth ramp = gradient). Flat poster colour ~0, photos/text change abruptly. */
+function lensRampShare(canvas){
+  const T=96,c=document.createElement('canvas');c.width=T;c.height=T;const x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,T,T);x.drawImage(canvas,0,0,T,T);
+  const d=x.getImageData(0,0,T,T).data,lab=[];for(let i=0;i<T*T;i++)lab.push(rgb2lab(d[i*4],d[i*4+1],d[i*4+2]));
+  let ramp=0,n=0;const df=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
+  for(let y=0;y<T-1;y++)for(let xx=0;xx<T-1;xx++){const a=lab[y*T+xx],r=df(a,lab[y*T+xx+1]),dn=df(a,lab[(y+1)*T+xx]);n++;if((r>.4&&r<5)||(dn>.4&&dn<5))ramp++}
+  return ramp/n}
+
+/* text-like blocks in an image-focused design: one text colour, stroke-like density, text-line proportions */
+function lensTextComps(S,ti){const N=S.W*S.H;
+  return blocksOf(S).filter(c=>{if(c.hero||c.dens<=.12||c.dens>=.75||c.h>=S.H*.3||c.area>=N*.35||c.w<=c.h*.25||c.h<S.H*.015)return false;
+    const cnt={};let tot=0;for(let y=c.y0;y<c.y1;y++)for(let x=c.x0;x<c.x1;x++){const p=y*S.W+x;if(S.ink[p]&&S.lab[p]===c.id){const k=ti.idx[p];cnt[k]=(cnt[k]||0)+1;tot++}}
+    return tot>0&&Math.max(0,...Object.values(cnt))/tot>=.85})}

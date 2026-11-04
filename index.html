@@ -95,7 +95,7 @@ li.it .where{color:var(--mute);font-size:11.5px;opacity:0;transition:.12s}li.it:
 .kb{margin-top:22px;border:1px solid var(--line);border-radius:10px;padding:12px 16px;background:var(--panel)}.kbl{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin-top:6px}.kbl>div{font-size:12.5px;line-height:1.4}.kbl small{display:block;color:var(--mute);font-style:italic}.kbl span{display:block}
 @media(max-width:860px){.res{grid-template-columns:1fr;grid-template-rows:minmax(0,46%) minmax(0,1fr);height:calc(100vh - 90px)}.res .pv{border-right:0;border-bottom:1px solid var(--line)}.res img.th{max-height:calc(46vh - 150px)}.res .cap{max-height:80px;min-height:0}}
 .badge{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:5px;letter-spacing:.06em}
-.b-pass{background:var(--pass-bg);color:var(--pass)}.b-warn{background:var(--warn-bg);color:var(--warn)}.b-fail{background:var(--fail-bg);color:var(--fail)}.b-info{background:transparent;color:var(--mute);border:1px solid var(--line2)}
+.b-tip{background:rgba(99,102,241,.14);color:#8b8ff5}.b-pass{background:var(--pass-bg);color:var(--pass)}.b-warn{background:var(--warn-bg);color:var(--warn)}.b-fail{background:var(--fail-bg);color:var(--fail)}.b-info{background:transparent;color:var(--mute);border:1px solid var(--line2)}
 .chk{list-style:none;margin:10px 0;padding:0;display:grid;gap:9px}.chk li{display:flex;gap:10px;align-items:flex-start}.chk .badge{flex:none;margin-top:1px;min-width:54px;text-align:center}.chk small{display:block;color:var(--mute);font-size:12.5px}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.chip{display:flex;align-items:center;gap:6px;border:1px solid var(--line2);border-radius:6px;padding:2px 8px 2px 3px;font-size:12px}.chip i{width:16px;height:16px;border-radius:4px;border:1px solid rgba(128,128,128,.4)}
 .muted{color:var(--mute)}.lock{font-size:12px;color:var(--mute)}label.chkl{display:flex;gap:8px;align-items:center}
@@ -150,7 +150,7 @@ button.logo{border:0;background:none;cursor:pointer;color:inherit;text-align:lef
 <script src="js/icons.js?v=28"></script>
 <script src="js/extra.js?v=28"></script>
 <script src="js/import.js?v=28"></script>
-<script src="js/lens.js?v=33"></script><script src="js/lens2.js?v=6"></script>
+<script src="js/lens.js?v=38"></script><script src="js/lens2.js?v=9"></script>
 <script>
 /* ---------- helpers ---------- */
 const $=(s,r=document)=>r.querySelector(s);
@@ -210,7 +210,7 @@ async function logoDims(file,dataUrl){
 
 /* ================= CHECKER ENGINE ================= */
 const FEATURES={logo:false};
-const LEVEL_RANK={info:0,pass:1,warn:2,fail:3};
+const LEVEL_RANK={info:0,tip:0,pass:1,warn:2,fail:3};
 function analyzeColors(canvas,rules,palette){
   const W=256,sc=Math.min(1,W/Math.max(canvas.width,canvas.height)),w=Math.max(1,Math.round(canvas.width*sc)),h=Math.max(1,Math.round(canvas.height*sc));
   const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(canvas,0,0,w,h);
@@ -466,7 +466,8 @@ function viewCheck(){
   ${c.results.map((r,ri)=>resCard(r,ri)).join('')}
   ${lensKnowledgeHTML()}`}
 function resCard(r,ri){
-  const lab={pass:'PASS',warn:'REVIEW',fail:'FAIL'}[r.level],cats=[...new Set(r.items.map(i=>i.cat||'Colour'))],head={'Brand fit':['Brand assessment','this creative compared with the client\'s colours, logos, fonts and written rules'],Logo:['Logo analysis','right logo · corner placement · top &amp; side margins · clear space'],Spacing:['Content analysis','spacing · alignment · typography · composition (logo excluded)']};
+  const lab={pass:'PASS',warn:'REVIEW',fail:'FAIL'}[r.level],cats=[...new Set(r.items.map(i=>i.cat||'Colour'))],head={'Brand fit':['Brand assessment','this creative compared with the client\'s colours, logos, fonts and written rules'],Logo:['Logo analysis','is it the right logo · edge spacing · clear space · logo colour'],Spacing:r.mode==='image'?['Text analysis','image-focused design: text spacing · text colour (other checks are skipped)']:['Content analysis','spacing · alignment · typography · composition (logo excluded)']};
+  const firstC=cats.find(c=>['Spacing','Alignment','Typography','Composition'].includes(c));if(firstC&&firstC!=='Spacing'){head[firstC]=head.Spacing;delete head.Spacing}
   const li=(i,ii)=>{const loc=(i.hl&&i.hl.length)||i.hlColor,has=i.level==='fail'||i.level==='warn'||loc;
     return`<li class="it${has?' clk':''}${r.sel===ii?' sel':''}"${has?` data-ls="${ri}:${ii}" tabindex="0"`:''}><span class="badge b-${i.level}">${i.level.toUpperCase()}</span><div><b>${esc(i.title)}</b>${i.detail?`<small>${esc(i.detail)}</small>`:''}${i.fix?`<small class="fix">→ ${esc(i.fix)}</small>`:''}${i.ref?`<small class="ref">Basis: ${esc(i.ref)}</small>`:''}${has?`<small class="where">📍 ${loc?'Show where on the design':'Applies to the whole design'}</small>`:''}</div></li>`};
   const anyG=(r.marks||[]).length>0;

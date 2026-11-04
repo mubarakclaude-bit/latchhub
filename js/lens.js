@@ -36,35 +36,38 @@ function relateColour(c,pal,tol,allowNeutral){
     if(dl<-5)return{kind:'shade',p:fam.p,loose:true,d:best.d};
     if(Math.abs(dl)<=5)return best.d<=15?{kind:'near',p:best.p,d:best.d}:{kind:'off',p:fam.p,d:best.d}}
   return best.d<=15&&best.p?{kind:'near',p:best.p,d:best.d}:{kind:'off',d:best.d}}
-function lensColours(cv,brand){
+function lensColours(cv,brand,opts={}){
   const rules=brand.rules||{},tol=+rules.tol||6,pal=brand.colors.map(c=>{const lab=labOfHex(c.hex);return{...c,rgb:hexToRgb(c.hex),lab,chroma:Math.hypot(lab[1],lab[2])}});
   const cl=mergeClusters(clustersOf(cv,.004)).filter(c=>c.pct>=.012),photo=cl.slice(0,8).reduce((s,c)=>s+c.pct,0)<.55,items=[];
   const forb=(rules.forbidden||'').split(/[\s,;]+/).map(normHex).filter(Boolean).map(h=>({hex:h,lab:labOfHex(h)}));
-  const groups={match:[],tint:[],shade:[],near:[],off:[],forb:[],neutral:[]};
+  const groups={match:[],tint:[],shade:[],near:[],off:[],forb:[],neutral:[],blend:[]};
   for(const c of cl){const f=forb.find(f=>dE(c.lab,f.lab)<10);if(f){c.status='forbidden';c.note='forbidden '+f.hex;groups.forb.push(c);continue}
     if(!pal.length){c.status='';continue}
-    const r=relateColour(c,pal,tol,rules.neutrals!==false);c.rel=r;c.status=r.kind;
-    c.note=r.kind==='match'?r.p.name:r.kind==='tint'?'light shade of '+r.p.name+(r.t?' (~'+Math.round(r.t*100)+'% tint)':''):r.kind==='shade'?'darker shade of '+r.p.name+(r.t?' (~'+Math.round(r.t*100)+'% black)':''):r.kind==='near'?'off-shade of '+(r.p&&r.p.name)+' (ΔE '+r.d.toFixed(1)+')':r.kind==='neutral'?'neutral':'not in palette';
+    let r=relateColour(c,pal,tol,rules.neutrals!==false);if(opts.grad&&(r.kind==='off'||r.kind==='near'||r.kind==='shade')){const bl=lensBlendMatch(c,pal,tol);if(bl)r={kind:'blend',bl}}c.rel=r;c.status=r.kind;
+    c.note=r.kind==='blend'?('gradient blend of '+r.bl.na+' + '+r.bl.nb+' (~'+Math.round(r.bl.t*100)+'%)'):r.kind==='match'?r.p.name:r.kind==='tint'?'light shade of '+r.p.name+(r.t?' (~'+Math.round(r.t*100)+'% tint)':''):r.kind==='shade'?'darker shade of '+r.p.name+(r.t?' (~'+Math.round(r.t*100)+'% black)':''):r.kind==='near'?'off-shade of '+(r.p&&r.p.name)+' (ΔE '+r.d.toFixed(1)+')':r.kind==='neutral'?'neutral':'not in palette';
     groups[r.kind==='neutral'?'neutral':r.kind].push(c)}
   const pct=a=>(a.reduce((s,c)=>s+c.pct,0)*100);
   if(!pal.length)items.push({cat:'Colour',level:'info',title:'No brand colours defined',detail:'Add the client colours first so the lens can judge shades.'});
   else{
     const brandPct=pct(groups.match),tintPct=pct(groups.tint);
-    if(groups.match.length||groups.tint.length)items.push({cat:'Colour',level:'pass',title:'Brand colour present',detail:[...groups.match.map(c=>c.rel.p.name+' '+c.rel.p.hex+' ('+(c.pct*100).toFixed(1)+'%)'),...[]].join(', ')||'Only lighter shades of brand colours are used.'+' (that is allowed)'});
+    if(groups.match.length||groups.tint.length||groups.blend.length)items.push({cat:'Colour',level:'pass',title:'Brand colour present',detail:[...groups.match.map(c=>c.rel.p.name+' '+c.rel.p.hex+' ('+(c.pct*100).toFixed(1)+'%)'),...[]].join(', ')||(groups.blend.length&&!groups.tint.length?'Only gradient blends of brand colours are used (allowed).':'Only lighter shades of brand colours are used (that is allowed).')});
     else items.push({cat:'Colour',level:'fail',title:'No brand colour detected',detail:'None of the palette colours (ΔE ≤ '+tol+') or their light shades cover at least 1% of the creative.',fix:'Use '+pal.filter(p=>p.chroma>=10).slice(0,2).map(p=>p.name+' '+p.hex).join(' or ')+' for the main shapes or text.'});
     if(groups.tint.length)items.push({cat:'Colour',level:'pass',title:'Light shades of brand colours – fine',detail:groups.tint.map(c=>c.hex+' = '+c.note+' · '+(c.pct*100).toFixed(1)+'%').join(' | ')+'. Tints add depth and are allowed; just keep the full-strength colour present as the anchor.'});
+    if(groups.blend.length){items.push({cat:'Colour',level:'pass',title:'Gradient blend colours – allowed ('+groups.blend.length+')',detail:groups.blend.map(c=>c.hex+' = '+c.note+' · '+(c.pct*100).toFixed(1)+'%').join(' | ')+'. Mixing approved colours in a gradient creates in-between colours; each of these lies on the blend path between approved colours, so it is accepted.',ref:'Gradient interpolation in sRGB / linear light / Lab (Figma, Photoshop, CSS Color 4); Itten & Albers on colour mixing',hlColor:groups.blend[0].hex});
+      const mud=groups.blend.filter(c=>Math.hypot(c.lab[1],c.lab[2])<22&&c.rel.bl.pc>=45);
+      if(mud.length)items.push({cat:'Colour',level:'tip',title:'Muddy middle in the gradient',detail:'The blend '+mud[0].hex+' looks dull because the end colours are far apart in hue – mixing near-opposites cancels saturation (the "grey middle").',fix:'Add a mid-stop in a brand colour, or interpolate in a perceptual space (OKLCH) if your tool allows.',hlColor:mud[0].hex,ref:'Complementary colour mixing (Itten); OKLab/OKLCH (Ottosson, 2020)'})}
     groups.shade.forEach(c=>items.push({cat:'Colour',level:'fail',title:'Darker shade of '+c.rel.p.name+' – not allowed ('+c.hex+')',detail:'Covers '+(c.pct*100).toFixed(1)+'%. Darkening a brand colour changes its identity.',fix:'Replace with '+c.rel.p.name+' '+c.rel.p.hex+', or use a lighter tint of it.',hlColor:c.hex}));
     if(!photo)groups.near.forEach(c=>items.push({cat:'Colour',level:c.pct>=.03?'fail':'warn',title:'Off-shade colour '+c.hex,detail:'Covers '+(c.pct*100).toFixed(1)+'% and sits close to '+c.rel.p.name+' without matching it ('+c.note+').',fix:'Use exactly '+c.rel.p.hex+' (click the swatch in the client page to copy it).',hlColor:c.hex}));
     groups.forb.forEach(c=>items.push({cat:'Colour',level:'fail',title:'Forbidden colour '+c.hex,detail:'Covers '+(c.pct*100).toFixed(1)+'% – '+c.note+'.',fix:'Remove it or swap it for a palette colour.',hlColor:c.hex}));
     if(!photo)groups.off.filter(c=>c.pct>=.02).forEach(c=>items.push({cat:'Colour',level:'warn',title:'Colour outside the palette '+c.hex,detail:'Covers '+(c.pct*100).toFixed(1)+'%. Not a brand colour or a shade of one.',fix:'Confirm it is intentional (photo, partner logo, client-approved accent) or replace it.',hlColor:c.hex}));
     if(photo)items.push({cat:'Colour',level:'info',title:'Photographic / gradient content',detail:'Many blended colours, so only brand presence and shades are judged – off-palette colours inside photos are not flagged.'});
-    if(!items.some(i=>i.level==='fail'||i.level==='warn'))items.push({cat:'Colour',level:'pass',title:'Colours are on brand',detail:'Palette adherence '+Math.round(brandPct+tintPct+pct(groups.neutral))+'% of the visible colour area.'})}
+    if(!items.some(i=>i.level==='fail'||i.level==='warn'))items.push({cat:'Colour',level:'pass',title:'Colours are on brand',detail:'Palette adherence '+Math.round(brandPct+tintPct+pct(groups.neutral)+pct(groups.blend))+'% of the visible colour area.'})}
   return{items,clusters:cl,photo}}
 function lensTextFix(bg,brand){
-  if(!bg)return'Darken the text or lighten the background.';
+  if(!bg)return'Optional: darken the text or lighten the background.';
   const opts=[...(brand.colors||[]).map(c=>({n:c.name+' '+c.hex,rgb:hexToRgb(c.hex)})),{n:'white #FFFFFF',rgb:[255,255,255]},{n:'black #000000',rgb:[0,0,0]}].map(o=>({...o,cr:contrastRatio(o.rgb,bg)})).filter(o=>o.cr>=4.5).sort((a,b)=>b.cr-a.cr);
   const pal=opts.filter(o=>!/white|black/.test(o.n.split(' ')[0].toLowerCase())||(brand.colors||[]).some(c=>c.hex.toLowerCase()===o.n.split(' ')[1].toLowerCase()));
-  const pick=(pal[0]||opts[0]);return pick?'Set this text in '+pick.n+' ('+pick.cr.toFixed(1)+':1 on this background) or change the background.':'Darken the text or lighten the background until the contrast reaches 4.5:1.'}
+  const pick=(pal[0]||opts[0]);return pick?'Optional: set this text in '+pick.n+' ('+pick.cr.toFixed(1)+':1 on this background), or lighten/darken the background.':'Optional: darken the text or lighten the background.'}
 /* ---------- layout scan ---------- */
 function dilate(m,W,H,rx,ry){const a=new Uint8Array(W*H),b=new Uint8Array(W*H);
   for(let y=0;y<H;y++){let last=-1e9;for(let x=0;x<W;x++){if(m[y*W+x])last=x;if(x-last<=rx)a[y*W+x]=1}last=1e9;for(let x=W-1;x>=0;x--){if(m[y*W+x])last=x;if(last-x<=rx)a[y*W+x]=1}}
@@ -75,10 +78,21 @@ function scanLayout(cv){
   const cl=mergeClusters(clustersOf(c,.003)),bg=cl[0],bgLab=bg.lab;
   let near=0;const lum=new Float32Array(N);for(let i=0;i<N;i++){const o=i*4;lum[i]=.299*d[o]+.587*d[o+1]+.114*d[o+2];if(dE(lab5(d[o],d[o+1],d[o+2]),bgLab)<9)near++}
   const edge=new Uint8Array(N);let ec=0;for(let y=1;y<H-1;y++)for(let xx=1;xx<W-1;xx++){const i=y*W+xx,gx=lum[i+1]-lum[i-1],gy=lum[i+W]-lum[i-W];if(Math.abs(gx)+Math.abs(gy)>46){edge[i]=1;ec++}}
-  const nearBg=near/N,edgeShare=ec/N,flat=nearBg>=.3,photo=!flat&&edgeShare>.16;
+  const nearBg=near/N,edgeShare=ec/N;let ramp=0;try{ramp=lensRampShare(cv)}catch{}const grad=ramp>=.2&&edgeShare<.16,flat=nearBg>=.3&&!grad,photo=!flat&&!grad&&edgeShare>.16;
   const ink=new Uint8Array(N);
-  if(flat){for(let i=0;i<N;i++){const o=i*4;if(dE(lab5(d[o],d[o+1],d[o+2]),bgLab)>11)ink[i]=1}}else if(!photo){ink.set(edge)}
-  return{W,H,sc,d,ink,flat,photo,smooth:!flat&&!photo,nearBg,edgeShare,bg,cl,lum}}
+  if(grad){/* gradient: an element is whatever differs from the colour right around it, not from the far end of the gradient */
+    const bl=gradBackground(d,W,H);for(let i=0;i<N;i++){const o=i*4;if(Math.abs(d[o]-bl[i*3])+Math.abs(d[o+1]-bl[i*3+1])+Math.abs(d[o+2]-bl[i*3+2])>60)ink[i]=1}}
+  else if(flat){for(let i=0;i<N;i++){const o=i*4;if(dE(lab5(d[o],d[o+1],d[o+2]),bgLab)>11)ink[i]=1}}else if(!photo){ink.set(edge)}
+  return{W,H,sc,d,ink,flat,photo,grad,ramp,smooth:!flat&&!photo,nearBg,edgeShare,bg,cl,lum}}
+/* background of a gradient design: most common colour of each cell (text is the minority), smoothly interpolated between cells */
+function gradBackground(d,W,H){const G=12,cw=W/G,ch=H/G,cells=[];
+  for(let gy=0;gy<G;gy++)for(let gx=0;gx<G;gx++){const h=new Map();for(let y=Math.floor(gy*ch);y<Math.floor((gy+1)*ch);y++)for(let x=Math.floor(gx*cw);x<Math.floor((gx+1)*cw);x++){const q=(y*W+x)*4,k=(d[q]>>4)<<8|(d[q+1]>>4)<<4|(d[q+2]>>4);let e=h.get(k);if(!e){e={n:0,r:0,g:0,b:0};h.set(k,e)}e.n++;e.r+=d[q];e.g+=d[q+1];e.b+=d[q+2]}
+    let best=null;h.forEach(e=>{if(!best||e.n>best.n)best=e});cells.push(best?[best.r/best.n,best.g/best.n,best.b/best.n]:[0,0,0])}
+  const o=new Float32Array(W*H*3);
+  for(let y=0;y<H;y++){const fy=Math.min(G-1.001,Math.max(0,y/ch-.5)),y0=Math.floor(fy),ty=fy-y0;
+    for(let x=0;x<W;x++){const fx=Math.min(G-1.001,Math.max(0,x/cw-.5)),x0=Math.floor(fx),tx=fx-x0,a=cells[y0*G+x0],b=cells[y0*G+x0+1],c=cells[(y0+1)*G+x0],e=cells[(y0+1)*G+x0+1];
+      for(let k=0;k<3;k++)o[(y*W+x)*3+k]=(a[k]*(1-tx)+b[k]*tx)*(1-ty)+(c[k]*(1-tx)+e[k]*tx)*ty}}
+  return o}
 function blocksOf(S){
   const{W,H,ink}=S,N=W*H,rx=Math.max(2,Math.round(W*.012)),ry=Math.max(2,Math.round(H*.006)),m=dilate(ink,W,H,rx,ry),lab=new Int32Array(N),st=new Int32Array(N),comps=[];let n=0;
   for(let i=0;i<N;i++){if(!m[i]||lab[i])continue;n++;let sp=0,x0=W,y0=H,x1=0,y1=0,cnt=0,ic=0;st[sp++]=i;lab[i]=n;
@@ -133,8 +147,9 @@ const LENS_KB={
   general:['Spacing: use a base unit (8 px) – margins, gaps and line-heights as multiples.','Alignment: one dominant axis per layout; mix centred and left-aligned text only on purpose.','Hierarchy: neighbouring type sizes should differ by ≥ 1.25×; headline ≈ 2–3× body.','Contrast: body text ≥ 4.5:1, large text ≥ 3:1.','Brand: logo clear space, correct variant for the background, full-strength brand colour present.']};
 function readStyle(f){const sc=LENS_KB.styles.map(s=>({s,v:s.test(f)})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v);return{main:sc[0].s,second:sc[1]&&sc[1].s.id!=='clean'?sc[1].s:null}}
 /* ---------- layout checks ---------- */
-function lensLayout(S,comps,fmt,logoBox,items,marks,feat,brand){
+function lensLayout(S,comps,fmt,logoBox,items,marks,feat,brand,mode){
   const{W,H,sc,d}=S,N=W*H,o=v=>Math.round(v/sc),short=Math.min(W,H),body=comps.filter(c=>!c.hero),mv=(x0,y0,x1,y1,c,dash)=>marks.push({t:'rect',x:x0/W,y:y0/H,w:(x1-x0)/W,h:(y1-y0)/H,c,dash});
+  const img=mode==='image';
   const RRm=(x0,y0,x1,y1,k)=>({x:x0/W,y:y0/H,w:(x1-x0)/W,h:(y1-y0)/H,k}),RCm=c=>RRm(c.x0,c.y0,c.x1,c.y1),strip=(n,t)=>RRm(...(n==='left'?[0,0,t,H]:n==='right'?[W-t,0,W,H]:n==='top'?[0,0,W,t]:[0,H-t,W,H]),'ref'),intr=(n,t)=>body.filter(c=>!c.full&&(n==='left'?c.x0<t:n==='right'?c.x1>W-t:n==='top'?c.y0<t:c.y1>H-t)).map(RCm);
   if(!body.length){items.push({cat:'Composition',level:'info',title:'Nothing to measure',detail:'The creative is a single image/background with no separate elements.'});return}
   const content=body.filter(c=>!c.full),minM=fmt.margin*short;
@@ -142,7 +157,7 @@ function lensLayout(S,comps,fmt,logoBox,items,marks,feat,brand){
   if(content.length){const L=Math.min(...content.map(c=>c.x0)),R=W-Math.max(...content.map(c=>c.x1)),tb=body.filter(c=>!(c.full||((c.y0<=1||c.y1>=H-1)&&c.w>W*.5))),T=Math.min(...(tb.length?tb:body).map(c=>c.y0)),B=H-Math.max(...(tb.length?tb:body).map(c=>c.y1));
     const sides=[['left',L],['right',R],['top',T],['bottom',B]].filter(([,v])=>v<minM);
     sides.forEach(([n,v])=>items.push({cat:'Spacing',level:v<minM*.45?'fail':'warn',title:'Content is very close to the '+n+' edge',detail:'Nearest element is '+o(v)+' px from the '+n+' edge; this format needs about '+o(minM)+' px ('+Math.round(fmt.margin*100)+'% of the short side).',fix:'Pull everything inside a '+px8(minM,sc)+' px margin.',hl:[strip(n,minM),...intr(n,minM)],ref:'Safe margins (Material / Apple HIG): ~4.5% of the short side'}));
-    if(Math.abs(L-R)>W*.035&&L>=minM*.6&&R>=minM*.6)items.push({cat:'Spacing',level:'warn',title:'Left and right margins are uneven',detail:'Left margin '+o(L)+' px vs right margin '+o(R)+' px.',fix:'Set both to '+px8((L+R)/2,sc)+' px so the layout sits square on the canvas.',hl:[RRm(0,0,L,H,'ref'),RRm(W-R,0,W,H,'ref')]});
+    if(Math.abs(L-R)>W*.035&&L>=minM*.6&&R>=minM*.6&&Math.max(L,R)<W*.14)items.push({cat:'Spacing',level:'warn',title:'Left and right margins are uneven',detail:'Left margin '+o(L)+' px vs right margin '+o(R)+' px.',fix:'Set both to '+px8((L+R)/2,sc)+' px so the layout sits square on the canvas.',hl:[RRm(0,0,L,H,'ref'),RRm(W-R,0,W,H,'ref')]});
     else if(!sides.length)items.push({cat:'Spacing',level:'pass',title:'Margins are healthy',detail:'Left '+o(L)+' · right '+o(R)+' · top '+o(T)+' · bottom '+o(B)+' px.'});
     mv(L,T,W-R,H-B,'rgba(99,102,241,.8)',1)}
   /* story safe zones */
@@ -152,6 +167,7 @@ function lensLayout(S,comps,fmt,logoBox,items,marks,feat,brand){
     else items.push({cat:'Spacing',level:'pass',title:'Safe zones respected',detail:'Nothing important sits under the story/reel interface.'})}
   /* alignment */
   const tight=W*.005,loose=W*.026,cand=body.filter(c=>!c.full);
+  if(!img){
   const group=(arr,key)=>{const s=[...arr].sort((a,b)=>a[key]-b[key]),gs=[];let cur=[];s.forEach(c=>{if(cur.length&&c[key]-cur[cur.length-1][key]>loose){gs.push(cur);cur=[]}cur.push(c)});if(cur.length)gs.push(cur);return gs.filter(g=>g.length>=2)};
   let misaligned=0,aligned=0;
   const cdev=cand.map(c=>({c,dev:Math.abs(c.cx-W/2)})).filter(x=>x.dev<=loose&&x.c.w>W*.08),edgeCand=cdev.length>=2?cand.filter(c=>!cdev.some(x=>x.c===c)):cand;
@@ -163,6 +179,7 @@ function lensLayout(S,comps,fmt,logoBox,items,marks,feat,brand){
   const leftG=group(cand,'x0').filter(g=>Math.max(...g.map(c=>c.x0))-Math.min(...g.map(c=>c.x0))<=tight),centred=cdev.filter(x=>x.dev<=tight&&x.c.w<W*.8);
   if(leftG.length&&centred.length>=2&&leftG[0].length>=2)items.push({cat:'Alignment',level:'info',title:'Mixed alignment: left-aligned and centred elements',detail:'Part of the layout hangs from a left edge and part from the centre line.',fix:'Fine when deliberate (e.g. centred logo over left-aligned copy); otherwise pick one axis.'});
   if(!misaligned&&aligned)items.push({cat:'Alignment',level:'pass',title:'Edges line up',detail:aligned+' alignment group(s) share an exact axis – the layout reads as ordered.'});
+  }
   /* vertical rhythm */
   const col=[...cand].sort((a,b)=>a.y0-b.y0),gaps=[];for(let i=1;i<col.length;i++){const g=col[i].y0-col[i-1].y1;if(g>=0)gaps.push({g,a:col[i-1],b:col[i]})}
   if(gaps.length>=2){const gv=gaps.map(x=>x.g),mean=gv.reduce((a,b)=>a+b,0)/gv.length,cv=Math.sqrt(gv.reduce((s,v)=>s+(v-mean)**2,0)/gv.length)/mean;
@@ -177,7 +194,7 @@ function lensLayout(S,comps,fmt,logoBox,items,marks,feat,brand){
   if(heights.length){const s=[...heights].sort((a,b)=>b-a);s.forEach(h=>{const L=levels[levels.length-1];if(L&&L.min/h<1.18){L.min=h;L.n++}else levels.push({max:h,min:h,n:1})});levels=levels.filter(l=>l.n>=1);ratio=levels.length>1?levels[0].max/levels[1].max:1}
   feat.levels=levels.length;feat.ratio=ratio;
   const textLines=lines.reduce((a,l)=>a+l.bands.length,0);
-  if(textLines>=3){
+  if(textLines>=3&&!img){
     if(levels.length===1)items.push({cat:'Typography',level:'warn',title:'Flat hierarchy – all text is one size',detail:'Every line measures about '+o(levels[0].max)+' px tall, so nothing leads the eye.',fix:'Make the headline 2–3× the body size and keep a small tertiary level for details.',hl:textComps.map(RCm),ref:'Modular type scale (Bringhurst); Swiss typographic hierarchy'});
     else if(levels.length>=5)items.push({cat:'Typography',level:'warn',title:'Too many text sizes ('+levels.length+')',detail:'Sizes found (px tall): '+levels.map(l=>o(l.max)).join(', ')+'.',fix:'Reduce to 3 sizes – headline, body, small – on a clear scale (≈1.25–1.5× steps).',hl:textComps.map(RCm),ref:'Modular type scale (Bringhurst)'});
     else if(ratio<1.3)items.push({cat:'Typography',level:'warn',title:'Headline and next size are too close ('+ratio.toFixed(2)+'×)',detail:'The largest text is only slightly bigger than the next level, so hierarchy is weak.',fix:'Scale the headline to at least 1.5× (ideally 2×) the next level.',hl:textComps.map(RCm),ref:'Modular type scale (Bringhurst)'});
@@ -188,9 +205,10 @@ function lensLayout(S,comps,fmt,logoBox,items,marks,feat,brand){
   if(lines.some(l=>l.bands.length>=3)&&!leadBad.length)items.push({cat:'Typography',level:'pass',title:'Consistent line spacing',detail:'Multi-line text keeps an even, readable leading.'});
   const lowC=[];textComps.forEach(c=>{let fr=0,fg=0,fb=0,n=0,br=0,bg=0,bb=0,m=0;for(let y=c.y0;y<c.y1;y++)for(let x=c.x0;x<c.x1;x++){const p=y*W+x,o2=p*4;if(S.ink[p]&&S.lab[p]===c.id){fr+=d[o2];fg+=d[o2+1];fb+=d[o2+2];n++}else if(!S.ink[p]){br+=d[o2];bg+=d[o2+1];bb+=d[o2+2];m++}}
     if(!n||!m)return;const cr=contrastRatio([fr/n,fg/n,fb/n],[br/m,bg/m,bb/m]),small=(c.h<H*.06);if(cr<3||(cr<4.5&&small))lowC.push({c,cr,small,bgc:[br/m,bg/m,bb/m]})});
-  lowC.slice(0,3).forEach(x=>{mv(x.c.x0,x.c.y0,x.c.x1,x.c.y1,'#ef4444');items.push({cat:'Typography',level:x.cr<3?'fail':'warn',title:'Low text contrast ('+x.cr.toFixed(1)+':1)',detail:'The text at x='+o(x.c.x0)+' px, y='+o(x.c.y0)+' px is hard to read ('+(x.small?'small text needs 4.5:1':'needs at least 3:1')+').',fix:lensTextFix(x.bgc,brand),hl:[RCm(x.c)],ref:'WCAG 2.1 contrast (4.5:1 body, 3:1 large)'})});
+  lowC.slice(0,3).forEach(x=>{mv(x.c.x0,x.c.y0,x.c.x1,x.c.y1,'#ef4444');items.push({cat:'Typography',level:'tip',title:'Text contrast suggestion ('+x.cr.toFixed(1)+':1)',detail:'The text at x='+o(x.c.x0)+' px, y='+o(x.c.y0)+' px could be easier to read (WCAG suggests '+(x.small?'4.5:1 for small text':'3:1 for large text')+'). Contrast often changes with the situation, so this is only a suggestion and is not scored.',fix:lensTextFix(x.bgc,brand),hl:[RCm(x.c)],ref:'WCAG 2.1 contrast (4.5:1 body, 3:1 large)'})});
   if(textComps.length&&!lowC.length)items.push({cat:'Typography',level:'pass',title:'Text contrast is readable',detail:'No text block falls below the recommended contrast.'});
-  if((brand.fonts||[]).length)items.push({cat:'Typography',level:'info',title:'Brand typefaces to confirm: '+brand.fonts.slice(0,3).map(f=>f.name).join(', '),detail:'An exported image cannot reveal which font was used.',fix:'Check the text styles in your source file (Figma / PSD / AI) against these.'});
+  if(!img&&(brand.fonts||[]).length)items.push({cat:'Typography',level:'info',title:'Brand typefaces to confirm: '+brand.fonts.slice(0,3).map(f=>f.name).join(', '),detail:'An exported image cannot reveal which font was used.',fix:'Check the text styles in your source file (Figma / PSD / AI) against these.'});
+  if(!img){
   /* balance & whitespace */
   let wsum=0,cx=0,cy=0;body.forEach(c=>{wsum+=c.ink;cx+=c.cx*c.ink;cy+=c.cy*c.ink});
   if(wsum){cx/=wsum;cy/=wsum;const dx=(cx-W/2)/W,dy=(cy-H/2)/H;feat.dx=dx;
@@ -203,18 +221,23 @@ function lensLayout(S,comps,fmt,logoBox,items,marks,feat,brand){
   else items.push({cat:'Composition',level:'pass',title:'Good use of white space ('+Math.round(ws*100)+'% open)',detail:'There is enough breathing room around the elements.'});
   /* bento detection */
   const cards=body.filter(c=>c.dens>.5&&c.w>W*.14&&c.h>H*.08&&!c.full);if(cards.length>=4){const ws2=cards.map(c=>c.w),hs=cards.map(c=>c.h);feat.bento=(Math.max(...ws2)/Math.min(...ws2)<1.6||Math.max(...hs)/Math.min(...hs)<1.6)}
+  }
   feat.blocks=body.length;feat.topText=Math.max(0,...textComps.map(c=>c.area/N))}
 /* ---------- the analyser ---------- */
 async function lensAnalyze(canvas,brand,label){
   const fmt=lensFormat(canvas.width,canvas.height),items=[],marks=[],feat={ws:.5,colors:0,blocks:0,levels:0,ratio:1,topText:0,bgL:50,avgL:50,sat:.3,grad:false,photo:false,bento:false};
   items.push({cat:'Scenario',level:'info',title:'Reading this as: '+fmt.name,detail:fmt.note});
-  const col=lensColours(canvas,brand);items.push(...col.items);await tickI();
-  feat.colors=col.clusters.filter(c=>c.pct>=.03).length;const top=col.clusters.slice(0,3);feat.avgL=top.reduce((s,c)=>s+c.lab[0]*c.pct,0)/(top.reduce((s,c)=>s+c.pct,0)||1);feat.sat=top.reduce((s,c)=>s+Math.min(1,Math.hypot(c.lab[1],c.lab[2])/80)*c.pct,0)/(top.reduce((s,c)=>s+c.pct,0)||1);
   const S=scanLayout(canvas);feat.photo=S.photo;feat.bgL=S.bg.lab[0];try{feat.grad=!S.flat&&!!gradientFrom(canvas)}catch{}
+  /* image-focused designs get a short check-list; graphic designs get the full one (gradient blends of approved colours are allowed) */
+  const imageMode=!!S.photo,gradMode=!imageMode&&(feat.grad||S.grad);
+  const col=lensColours(canvas,brand,{grad:gradMode});if(!imageMode)items.push(...col.items);await tickI();
+  feat.colors=col.clusters.filter(c=>c.pct>=.03).length;const top=col.clusters.slice(0,3);feat.avgL=top.reduce((s,c)=>s+c.lab[0]*c.pct,0)/(top.reduce((s,c)=>s+c.pct,0)||1);feat.sat=top.reduce((s,c)=>s+Math.min(1,Math.hypot(c.lab[1],c.lab[2])/80)*c.pct,0)/(top.reduce((s,c)=>s+c.pct,0)||1);
+  let textInfo=null;
+  if(imageMode){textInfo=lensTextInk(S,brand);S.ink.set(textInfo.ink);items.push({cat:'Scenario',level:'info',title:'Image-focused design – checking only the essentials',detail:'Checked: is the logo correct, logo spacing, logo colour, text spacing and text colour. Whole-image colour, composition and style are not judged on photographs.'})}
   /* 1) LOGO – judged on its own, never as content */
   const logos=lensLogoList(brand),imgs={};let logoRes=null,lockup=null;
   if(logos.length){for(const l of logos){try{imgs[l.id]=await loadImg(l.data)}catch{}}
-    try{logoRes=await analyzeLogo2(canvas,logos,imgs,brand.rules||{},{complexBg:!S.flat,blob:async()=>{const bl=await blobLogo(canvas,logos,imgs);if(!bl||bl.score<.5)return null;const mn=+(brand.rules||{}).minLogo||0,small=mn&&bl.wPct<mn;return{level:small?'fail':'pass',title:small?'Logo too small':'Logo found',detail:'Recognised as "'+bl.L.name+'" by its colours and proportions, about '+Math.round(bl.box.w)+' px wide = '+bl.wPct.toFixed(1)+'% of the width'+(small?'. Brand rule: logo must be at least '+mn+'% of the width.':'.'),box:bl.box,boxOk:true,fuzzy:true,L:bl.L}}})}catch(e){items.push({cat:'Logo',level:'info',title:'Logo detection failed',detail:e.message})}}
+    try{logoRes=await analyzeLogo2(canvas,logos,imgs,brand.rules||{},{complexBg:!S.flat&&!S.grad,blob:async()=>{const bl=await blobLogo(canvas,logos,imgs);if(!bl||bl.score<.5)return null;const mn=+(brand.rules||{}).minLogo||0,small=mn&&bl.wPct<mn;return{level:small?'fail':'pass',title:small?'Logo too small':'Logo found',detail:'Recognised as "'+bl.L.name+'" by its colours and proportions, about '+Math.round(bl.box.w)+' px wide = '+bl.wPct.toFixed(1)+'% of the width'+(small?'. Brand rule: logo must be at least '+mn+'% of the width.':'.'),box:bl.box,boxOk:true,fuzzy:true,L:bl.L}}})}catch(e){items.push({cat:'Logo',level:'info',title:'Logo detection failed',detail:e.message})}}
   else items.push({cat:'Logo',level:'info',title:'No logo files to look for',detail:'Add PNG/SVG logos to this client so the lens can check placement and clear space.'});
   /* a colour-exact hit on a flat patch is not a logo: confirm the SHAPE too (colour-agnostic, so white/reversed versions still match) */
   const rules0=brand.rules||{};
@@ -231,19 +254,24 @@ async function lensAnalyze(canvas,brand,label){
   if(locBox){lockup=lensClearSpace(S,locBox,rules0,items,marks,fmt);
     /* the logo (and any tagline locked up with it) is not content: remove it from every layout measurement below */
     const m=2;for(let y=Math.max(0,Math.floor(lockup.y0-m));y<Math.min(S.H,Math.ceil(lockup.y1+m));y++)for(let x=Math.max(0,Math.floor(lockup.x0-m));x<Math.min(S.W,Math.ceil(lockup.x1+m));x++)S.ink[y*S.W+x]=0}
-  try{lensClientMismatch(brand,col,items)}catch(e){console.warn('mismatch',e)}
-  try{lensBrandFit(brand,col,S,logoRes,logos,imgs,lockup,feat,items)}catch(e){console.warn('brand fit',e)}
+  try{if(!imageMode)lensClientMismatch(brand,col,items)}catch(e){console.warn('mismatch',e)}
+  try{lensBrandFit(brand,col,S,logoRes,logos,imgs,lockup,feat,items,imageMode)}catch(e){console.warn('brand fit',e)}
   /* 2) CONTENT – everything except the logo */
   let comps=[];
-  if(S.photo)items.push({cat:'Composition',level:'info',title:'Photo-led image',detail:'Spacing and alignment are judged only where elements stand apart from the photo, so these checks are limited here.',fix:'Check text placement on a calm area and keep the logo on the cleanest corner.'});
+  if(imageMode){comps=lensTextComps(S,textInfo);
+    if(!comps.length)items.push({cat:'Typography',level:'info',title:'No text detected',detail:'No text set in a brand colour, white or black was found over the image. Text in other colours cannot be detected on photographs.'});
+    else{lensLayout(S,comps,fmt,lockup,items,marks,feat,brand,'image');
+      const used=new Map();comps.forEach(c=>{const cnt={};for(let y=c.y0;y<c.y1;y++)for(let x=c.x0;x<c.x1;x++){const p=y*S.W+x;if(S.ink[p]&&S.lab[p]===c.id){const k=textInfo.idx[p];cnt[k]=(cnt[k]||0)+1}}const k=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0];if(k)used.set(textInfo.names[k-1],(used.get(textInfo.names[k-1])||0)+1)});
+      items.push({cat:'Typography',level:'pass',title:'Text colours: '+[...used.keys()].join(', '),detail:'The text found is set in brand colours (or white/black). Text in any other colour cannot be detected over a photograph, so check that by eye.'})}}
   else{comps=blocksOf(S);lensLayout(S,comps,fmt,lockup,items,marks,feat,brand)}
-  try{lensScience(S,comps,fmt,items,col,brand)}catch(e){console.warn('science',e)}
-  const st=readStyle(feat);items.push({cat:'Composition',level:'info',title:'Style read: '+st.main.name+(st.second?' (with '+st.second.name.toLowerCase()+' cues)':''),detail:'Detected from layout and colour behaviour – '+st.main.advice.join(' ')});
+  if(!imageMode)try{lensScience(S,comps,fmt,items,col,brand)}catch(e){console.warn('science',e)}
+  const st=imageMode?{main:{name:'Image-focused'},second:null}:readStyle(feat);
+  if(!imageMode)items.push({cat:'Composition',level:'info',title:'Style read: '+st.main.name+(st.second?' (with '+st.second.name.toLowerCase()+' cues)':''),detail:'Detected from layout and colour behaviour – '+st.main.advice.join(' ')});
   const order=['Scenario','Brand fit','Colour','Logo','Spacing','Alignment','Typography','Composition'];items.sort((a,b)=>order.indexOf(a.cat)-order.indexOf(b.cat));
   let score=100;items.forEach(i=>{if(i.level==='fail')score-=14;else if(i.level==='warn')score-=5});score=Math.max(0,score);
   const worst=items.reduce((m,i)=>LEVEL_RANK[i.level]>LEVEL_RANK[m]?i.level:m,'pass');
   const tw=Math.min(640,canvas.width),tf=tw/canvas.width,tc=document.createElement('canvas');tc.width=tw;tc.height=Math.round(canvas.height*tf);tc.getContext('2d').drawImage(canvas,0,0,tc.width,tc.height);
-  return{label,items,marks,sel:null,guides:false,clusters:col.clusters.slice(0,12),level:worst==='info'?'pass':worst,score,fmt:fmt.name,style:st.main.name,thumb:tc.toDataURL('image/jpeg',.88),w:canvas.width,h:canvas.height}}
+  return{label,items,marks,sel:null,guides:false,clusters:col.clusters.slice(0,12),level:worst==='info'?'pass':worst,score,fmt:fmt.name,mode:imageMode?'image':'graphic',style:st.main.name,thumb:tc.toDataURL('image/jpeg',.88),w:canvas.width,h:canvas.height}}
 /* ---------- logo detection v2: shape + tone correlation + colour verification ---------- */
 function renderTpl2(img,lw,lh,tw,asp=1){
   const th=Math.max(2,Math.round(tw*lh/lw*asp)),pad=Math.max(2,Math.round(tw*.08)),W=tw+2*pad,H=th+2*pad,c=document.createElement('canvas');c.width=W;c.height=H;
