@@ -144,7 +144,7 @@ button.logo{border:0;background:none;cursor:pointer;color:inherit;text-align:lef
 .igen{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}.igc{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel);display:flex;flex-direction:column;gap:8px;padding-bottom:10px}.igc input,.igc button{margin:0 10px}.igp{aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;padding:22px}.igp svg{width:100%;height:100%}.igchips{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px}
 @media(max-width:860px){#app{grid-template-columns:1fr}aside{position:static;height:auto;flex-direction:row;overflow:auto;padding:10px;gap:6px;border-right:0;border-bottom:1px solid var(--line)}.sec,.sp,.logo,.tree .dots{display:none}.tree{margin:0;border:0;display:flex}.nav{width:auto;flex:none}.nav.on:before{display:none}.nav.child{padding:6px 8px;border-radius:8px}.nav.child:after{display:none}.nav .dots,.nav .cnt{display:none}main{padding:16px 14px 60px}.hero{padding:24px;min-height:0}.res{grid-template-columns:1fr}}
 </style>
-<link rel="stylesheet" href="css/flat.css?v=1">
+<link rel="stylesheet" href="css/flat.css?v=2">
 </head>
 <body>
 <div id="app"></div>
@@ -375,18 +375,14 @@ const navRow=(x,n)=>`<button class="nav ${x.parent?'child':''} ${ui.view==='bran
 function render(){
   const b=brand(),enter=ui.anim?'enter':'';ui.anim=false;
   const hex=ui.view==='home'?'#111111':ui.view==='brand'?brandHex(b):brandHex(S.brands.find(x=>x.id===ui.check.brandId)||b);
-  $('#app').innerHTML=`<aside><button class="logo" data-a="home" title="LatchHub home"><img src="assets/latchhub/logo.svg" alt="" onerror="this.onerror=function(){this.replaceWith(Object.assign(document.createElement('b'),{className:'lh-mark'}))};this.src='assets/latchhub/logo.png'">LatchHub</button>
-   <button class="nav ${ui.view==='home'?'on':''}" data-a="home"><span class="th" style="background:transparent;color:var(--ink)">⌂</span><span class="nm">Home</span></button>
-   <div class="sec">Clients</div>
-   ${S.brands.filter(x=>!x.parent||!S.brands.some(y=>y.id===x.parent)).map(x=>{const ks=S.brands.filter(y=>y.parent===x.id);return navRow(x,ks.length)+(ks.length?`<div class="tree">${ks.map(k=>navRow(k)).join('')}</div>`:'')}).join('')}
-   <button class="nav" data-a="newBrand"><span class="th" style="background:transparent;color:var(--brand);font-size:20px">＋</span><span class="nm">New brand</span></button>
-   <div class="sec">Tools</div>
-   <button class="nav ${ui.view==='check'?'on':''}" data-a="openCheck"><span class="th" style="background:transparent;color:var(--ink)">◎</span><span><span class="nm">Design Lens</span><span class="muted" style="font-size:11px">beta</span></span></button>
-   <div class="sp"></div>
-   <div class="seg tsw" title="Theme">${[['light','Light'],['auto','Auto'],['dark','Dark']].map(t=>`<button class="${THEME.get()===t[0]?'on':''}" data-a="theme" data-id="${t[0]}">${t[1]}</button>`).join('')}</div>
-   <label class="chkl lock" style="margin:8px 10px"><input type="checkbox" data-c="edit" ${ui.edit?'checked':''}> Edit mode</label>
-   <div class="row" style="margin:0 8px"><button class="btn sm" data-a="export">Backup</button><button class="btn sm" data-a="import">Restore</button><input type="file" id="imp" accept=".json" hidden></div>
-  </aside><main class="${enter}" style="--brand:${hex}">${DEMO?'<div style="margin-bottom:14px"><span class="badge b-warn">DEMO MODE – sample clients only; your real data is untouched</span></div>':''}${ui.view==='home'?viewHome():ui.view==='check'?viewCheck():(b?viewBrand(b):viewEmpty())}</main>`;
+  const par0=b&&S.brands.find(y=>y.id===b.parent),here=ui.view==='brand'&&b?(par0?`<button class="tl" data-a="open" data-id="${par0.id}">${esc(par0.name)}</button><span class="tsep">/</span>`:'')+`<span class="tcur">${esc(b.name)}</span>`:ui.view==='check'?'<span class="tcur">Design Lens</span>':'';
+  $('#app').innerHTML=`<header class="tb"><button class="logo" data-a="home" title="All brands"><img src="assets/latchhub/logo.svg" alt="" onerror="this.onerror=function(){this.replaceWith(Object.assign(document.createElement('b'),{className:'lh-mark'}))};this.src='assets/latchhub/logo.png'">LatchHub</button>
+   <nav class="tn"><button class="tl ${ui.view==='home'?'on':''}" data-a="home">${ui.view==='home'?'All brands':'← All brands'}</button>${here?`<span class="tsep">/</span>${here}`:''}</nav>
+   <div class="tbr"><button class="tl ${ui.view==='check'?'on':''}" data-a="openCheck">Design Lens <span class="muted" style="font-size:9px">beta</span></button>
+    <label class="chkl tl"><input type="checkbox" data-c="edit" ${ui.edit?'checked':''}> Edit mode</label>
+    <details class="tmore"><summary class="tl">Settings</summary><div class="tpanel"><div class="cap2">Theme</div><div class="seg tsw">${[['light','Light'],['auto','Auto'],['dark','Dark']].map(t=>`<button class="${THEME.get()===t[0]?'on':''}" data-a="theme" data-id="${t[0]}">${t[1]}</button>`).join('')}</div>
+     <button class="btn sm" data-a="newBrand">＋ New brand</button><button class="btn sm" data-a="export">Backup</button><button class="btn sm" data-a="import">Restore</button><input type="file" id="imp" accept=".json" hidden></div></details></div>
+  </header><main class="${enter}" style="--brand:${hex}">${DEMO?'<div style="margin-bottom:14px"><span class="badge b-warn">DEMO MODE – sample clients only; your real data is untouched</span></div>':''}${ui.view==='home'?viewHome():ui.view==='check'?viewCheck():(b?viewBrand(b):viewEmpty())}</main>`;
   if(enter)window.scrollTo(0,0);
   if(ui.view==='home'&&typeof homeLogos==='function')homeLogos();
   const imp=$('#imp');if(imp)imp.onchange=async e=>{try{const j=JSON.parse(await e.target.files[0].text());if(!j.brands)throw 0;S=j;S.brands.forEach(b=>b.fonts.forEach(f=>f.file&&registerFont(f)));save();ui.brandId=S.brands[0]?.id;ui.anim=true;render();toast('Restored')}catch{toast('Not a valid backup file')}};
