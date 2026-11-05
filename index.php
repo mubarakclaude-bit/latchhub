@@ -54,7 +54,7 @@ button{width:100%;margin-top:40px;font:inherit;font-size:11px;letter-spacing:.1e
 </style></head><body>
 <div class="art"><span class="cap">Latch Infinity — Brand asset hub</span><h1>LatchHub</h1></div>
 <main class="card">
-  <span class="cap2">Team sign in</span><h2>Welcome<br>back</h2>
+  <span class="cap2">Sign in to continue</span><h2>Welcome<br>back</h2>
   <form id="f" autocomplete="on">
     <label for="u">Email</label><input id="u" name="username" type="email" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
     <label for="p">Password</label><input id="p" name="password" type="password" autocomplete="current-password" required>
