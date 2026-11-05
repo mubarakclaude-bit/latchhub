@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>LatchHub</title>
 <link rel="icon" type="image/svg+xml" href="assets/latchhub/favicon.svg">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="light">
 <style>
 :root{--bg:#fbfbfa;--panel:#fff;--ink:#0b0b0b;--mute:#717171;--line:#e8e8e6;--line2:#d4d4d1;--accent:var(--brand,#2f5bea);--pass:#15803d;--warn:#a16207;--fail:#b91c1c;--pass-bg:#e7f6ec;--warn-bg:#fbf1d9;--fail-bg:#fbe9e9;--chk1:#fff;--chk2:#ececec}
 :root[data-theme=dark]{--bg:#0a0a0a;--panel:#111;--ink:#f3f3f2;--mute:#8c8c8a;--line:#222;--line2:#363636;--pass:#4ade80;--warn:#facc15;--fail:#f87171;--pass-bg:#0f2a19;--warn-bg:#2b2410;--fail-bg:#2f1414;--chk1:#222;--chk2:#2c2c2c}
@@ -144,14 +144,14 @@ button.logo{border:0;background:none;cursor:pointer;color:inherit;text-align:lef
 .igen{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}.igc{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel);display:flex;flex-direction:column;gap:8px;padding-bottom:10px}.igc input,.igc button{margin:0 10px}.igp{aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;padding:22px}.igp svg{width:100%;height:100%}.igchips{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px}
 @media(max-width:860px){#app{grid-template-columns:1fr}aside{position:static;height:auto;flex-direction:row;overflow:auto;padding:10px;gap:6px;border-right:0;border-bottom:1px solid var(--line)}.sec,.sp,.logo,.tree .dots{display:none}.tree{margin:0;border:0;display:flex}.nav{width:auto;flex:none}.nav.on:before{display:none}.nav.child{padding:6px 8px;border-radius:8px}.nav.child:after{display:none}.nav .dots,.nav .cnt{display:none}main{padding:16px 14px 60px}.hero{padding:24px;min-height:0}.res{grid-template-columns:1fr}}
 </style>
-<link rel="stylesheet" href="css/flat.css?v=5">
+<link rel="stylesheet" href="css/flat.css?v=5"><link rel="stylesheet" href="css/svgstudio.css?v=1">
 </head>
 <body>
 <div id="app"></div>
 <div class="toast" id="toast"></div>
 <script src="js/icons.js?v=28"></script>
-<script src="js/extra.js?v=29"></script>
-<script src="js/import.js?v=30"></script><script src="js/pdftools.js?v=4"></script><script src="js/variants.js?v=3"></script>
+<script src="js/extra.js?v=30"></script>
+<script src="js/import.js?v=30"></script><script src="js/pdftools.js?v=4"></script><script src="js/variants.js?v=3"></script><script src="js/svgstudio.js?v=2"></script>
 <script src="js/lens.js?v=38"></script><script src="js/lens2.js?v=9"></script><script src="js/sync.js?v=3"></script>
 <script>
 /* ---------- helpers ---------- */
@@ -382,7 +382,7 @@ function render(){
    <nav class="tn"><button class="tl ${ui.view==='home'?'on':''}" data-a="home">${ui.view==='home'?'All brands':'← All brands'}</button>${here?`<span class="tsep">/</span>${here}`:''}</nav>
    <div class="tbr"><button class="tl ${ui.view==='check'?'on':''}" data-a="openCheck">Design Lens <span class="muted" style="font-size:9px">beta</span></button>
     <label class="chkl tl"><input type="checkbox" data-c="edit" ${ui.edit?'checked':''}> Edit mode</label>
-    <details class="tmore"><summary class="tl">Settings</summary><div class="tpanel"><div class="cap2">Theme</div><div class="seg tsw">${[['light','Light'],['auto','Auto'],['dark','Dark']].map(t=>`<button class="${THEME.get()===t[0]?'on':''}" data-a="theme" data-id="${t[0]}">${t[1]}</button>`).join('')}</div>
+    <details class="tmore"><summary class="tl">Settings</summary><div class="tpanel">${DARK_MODE?`<div class="cap2">Theme</div><div class="seg tsw">${[['light','Light'],['auto','Auto'],['dark','Dark']].map(t=>`<button class="${THEME.get()===t[0]?'on':''}" data-a="theme" data-id="${t[0]}">${t[1]}</button>`).join('')}</div>`:''}
      <button class="btn sm" data-a="newBrand">＋ New brand</button><button class="btn sm" data-a="export">Backup</button><button class="btn sm" data-a="import">Restore</button></div></details><input type="file" id="imp" accept=".json" hidden></div>
   </header><main class="${enter}" style="--brand:${hex}">${DEMO?'<div style="margin-bottom:14px"><span class="badge b-warn">DEMO MODE – sample clients only; your real data is untouched</span></div>':''}${ui.view==='home'?viewHome():ui.view==='check'?viewCheck():(b?viewBrand(b):viewEmpty())}</main>`;
   if(enter)window.scrollTo(0,0);
@@ -398,9 +398,9 @@ function viewBrand(b){
    <div class="stats"><span>${b.colors.length} colours</span><span>${b.logos.length} logos</span><span>${b.fonts.length} fonts</span></div>
    <div class="row"><button class="btn pri" data-a="checkThis">Analyse a creative</button>${ui.edit?`<button class="btn sm" data-a="renameBrand">Rename</button><button class="btn sm del" data-a="delBrand">Delete client</button>`:''}</div></div>
    ${hl?`<div class="hlogo"><img src="${hsrc(hl)}"></div>`:''}</div>
-   <div class="pills">${kids.length?`<button class="pill" data-a="goto" data-id="s-kids">Sub-brands</button>`:''}<button class="pill" data-a="goto" data-id="s-colors">Colors</button><button class="pill" data-a="goto" data-id="s-logos">Logos</button><button class="pill" data-a="goto" data-id="s-links">Links</button>${(b.elements||[]).length||b.logos.some(isPat)?`<button class="pill" data-a="goto" data-id="s-elements">Elements</button>`:''}<button class="pill" data-a="goto" data-id="s-fonts">Fonts</button>${b.rules.notes||ui.edit?`<button class="pill" data-a="goto" data-id="s-guide">Guidelines</button>`:''}${b.book?`<button class="pill" data-a="goto" data-id="s-book">Brand book</button>`:''}</div>
+   <div class="pills">${kids.length?`<button class="pill" data-a="goto" data-id="s-kids">Sub-brands</button>`:''}<button class="pill" data-a="goto" data-id="s-colors">Colors</button><button class="pill" data-a="goto" data-id="s-logos">Logos</button>${SVGS.list(b).length?`<button class="pill" data-a="goto" data-id="s-svg">SVG</button>`:''}<button class="pill" data-a="goto" data-id="s-links">Links</button>${(b.elements||[]).length||b.logos.some(isPat)?`<button class="pill" data-a="goto" data-id="s-elements">Elements</button>`:''}<button class="pill" data-a="goto" data-id="s-fonts">Fonts</button>${b.rules.notes||ui.edit?`<button class="pill" data-a="goto" data-id="s-guide">Guidelines</button>`:''}${b.book?`<button class="pill" data-a="goto" data-id="s-book">Brand book</button>`:''}</div>
    ${kids.length?`<section id="s-kids" style="margin-top:10px"><div class="sh"><h3>Brands under ${esc(b.name)}<span class="hint">Each sub-brand has its own colours and logos</span></h3></div><div class="kgrid">${kids.map(k=>`<button class="kid" data-a="open" data-id="${k.id}"><span class="kth">${thumb(k)}</span><span class="kt"><b>${esc(k.name)}</b><span class="kmeta">${k.logos.length} logos · ${k.colors.length} colours</span><span class="dots">${k.colors.slice(0,6).map(c=>`<i style="background:${c.hex}"></i>`).join('')}</span></span><span class="karr">→</span></button>`).join('')}</div></section>`:''}
-   ${secColors(b)}${secLogos(b)}${secLinks(b)}${secElements(b)}${secFonts(b)}${secGuide(b)}${secBook(b)}`}
+   ${secColors(b)}${secLogos(b)}${SVGS.section(b)}${secLinks(b)}${secElements(b)}${secFonts(b)}${secGuide(b)}${secBook(b)}`}
 
 function colorTile(c,big){return`<div class="ct"><button class="cs ${big?'big':''}" style="--c:${c.hex};color:${inkOn(c.hex)}" data-a="cp" data-v="${c.hex}"><span class="cn">${esc(c.name)}</span><span class="chx">${c.hex}</span><span class="cta">Click to copy</span><span class="ok" style="color:${inkOn(c.hex)}">✓ Copied ${c.hex}</span></button>${ui.edit?`<div class="row" style="margin-top:6px"><button class="btn sm" data-a="editColor" data-id="${c.id}">Edit</button><button class="btn sm del" data-a="delColor" data-id="${c.id}">Delete</button></div>`:''}</div>`}
 function secColors(b){
@@ -547,6 +547,7 @@ document.addEventListener('click',async e=>{
   else if(a==='copyCss'){copy(':root{\n'+b.colors.map(c=>`  --${b.name.toLowerCase().replace(/\W+/g,'-')}-${c.name.toLowerCase().replace(/\W+/g,'-')}: ${c.hex};`).join('\n')+'\n}');return}
   else if(a==='ase'){download(b.name+' swatches.ase',[makeASE(b.colors)],'application/octet-stream');return}
   else if(a==='renameLogo'){const l=b.logos.find(x=>x.id===id),n=prompt('Logo name',l.name);if(n)l.name=n}
+  else if(a==='svgCustom'){const l=b.logos.find(x=>x.id===id);if(l)await SVGS.open(b,l);return}
   else if(a==='logoVariants'){const l=b.logos.find(x=>x.id===id);toast('Creating white and greyscale versions…',60000);
     try{const v=await logoVariants(l,b.logos);if(!v.length){toast('Nothing to add – this logo already has them, or its colours cannot be converted',6000);return}
       for(const p of v)b.logos.push(logoEntry(p,slug2(b.name)));toast(v.length+' version'+(v.length>1?'s':'')+' added: '+v.map(x=>x.name.split(' – ').pop()).join(' + '),5000)}catch(err){toast('⚠ '+err.message,6000);return}}

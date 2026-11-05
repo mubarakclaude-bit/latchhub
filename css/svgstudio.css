@@ -1,0 +1,15 @@
+/* SVG studio (customise window) – flat and square, matches flat.css */
+.svgrid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:24px;align-items:start}
+@media(max-width:760px){.svgrid{grid-template-columns:1fr}}
+.svprev{border:1px solid var(--ink);min-height:300px;display:flex;align-items:center;justify-content:center;padding:28px;background:#fff}
+.svprev img{max-width:100%;max-height:340px;display:block}
+.svprev.bg-dark{background:#141414}
+.svprev.bg-check{background:repeating-conic-gradient(#e7e7e4 0 25%,#fff 0 50%) 0 0/16px 16px}
+.svrow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.svo{display:flex;align-items:center;gap:8px;min-width:140px}.svo i{width:24px;height:24px;border:1px solid var(--line2);display:inline-block}.svo b{font:12px ui-monospace,Menlo,monospace}.svo small{color:var(--mute);font-size:11px}
+.svpal{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.svsw{position:relative;width:30px;height:30px;border:1px solid var(--line2);cursor:pointer;padding:0}
+.svsw span{position:absolute;left:50%;top:34px;transform:translateX(-50%);font-size:9.5px;white-space:nowrap;color:var(--mute);opacity:0;pointer-events:none;background:var(--bg);padding:0 3px;z-index:3}
+.svsw:hover span{opacity:1}.svsw.on{outline:2px solid var(--ink);outline-offset:2px}
+.svkeep{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;border:1px solid var(--line2);background:none;color:var(--mute);padding:6px 9px;cursor:pointer;height:30px}.svkeep.on{border-color:var(--ink);color:var(--ink)}
+.svfoot{display:flex;gap:10px;align-items:center;margin-top:22px;padding-top:16px;border-top:1px solid var(--ink);flex-wrap:wrap}

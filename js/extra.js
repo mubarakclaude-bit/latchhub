@@ -1,7 +1,9 @@
 /* LatchHub – theme, home page, icon generator UI */
 const slug2=s=>String(s).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 /* ---------- theme ---------- */
-const THEME={get(){try{return localStorage.getItem('lh-theme')||'auto'}catch{return'auto'}},
+/* Dark mode is switched off for now: set DARK_MODE to true to bring back the Light / Auto / Dark choice (and the CSS for dark is still in place). */
+const DARK_MODE=false;
+const THEME={get(){if(!DARK_MODE)return'light';try{return localStorage.getItem('lh-theme')||'auto'}catch{return'auto'}},
   set(v){try{localStorage.setItem('lh-theme',v)}catch{}this.apply()},
   apply(){const v=this.get(),r=document.documentElement;if(v==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',v)}};
 THEME.apply();
