@@ -131,6 +131,11 @@ IF=$(UP failbr1 "Stubborn" "$T/failtrash.txt" | jget id)
 SV "{\"action\":\"save\",\"base_version\":0,\"brand\":{\"id\":\"failbr1\",\"name\":\"Stubborn\",\"logos\":[{\"a\":\"api/download.php?id=$IF\"}]}}" > /dev/null
 R5=$(SV '{"action":"save","base_version":1,"brand":{"id":"failbr1","name":"Stubborn","logos":[]}}'); ok "when Zoho refuses, the save still succeeds" 0 "$(echo "$R5" | jget trashed)"
 ok "  … and the failed trash is queued for retry" 1 "$(sqlite3 "$T/t.db" "select count(*) from lh_pending where zoho_id='$IF'")"
+ok "admin sees the queue with Zoho's own reply" 1 "$(curl -s -b "$J" "$B/api/brands.php?pending=1" | python3 -c 'import sys,json;print(sum(1 for p in json.load(sys.stdin)["pending"] if "F415" in p["reason"]))')"
+RT=$(curl -s -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"action":"retry_pending"}' "$B/api/brands.php"); ok "retrying while Zoho still refuses keeps it queued" 1 "$(echo "$RT" | jget failed)"
+curl -s -X PATCH -H 'Authorization: Zoho-oauthtoken TESTTOKEN' -H 'Content-Type: application/vnd.api+json' -d '{"data":{"attributes":{"name":"fine-now.txt"},"type":"files"}}' "http://127.0.0.1:8901/workdrive/api/v1/files/$IF" > /dev/null
+RT2=$(curl -s -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"action":"retry_pending"}' "$B/api/brands.php"); ok "once Zoho accepts, retry clears the queue" 0 "$(sqlite3 "$T/t.db" "select count(*) from lh_pending where zoho_id='$IF'")"
+ok "  … and the file is in the Zoho trash" 1 "$(MOCKTRASHED "$IF")"
 echo "renaming follows into Zoho"
 MOCKNAME(){ python3 -c "import json,sys;print(json.load(open('$T/mock.json'))['files'][sys.argv[1]]['name'])" "$1"; }
 MOCKPARENT(){ python3 -c "import json,sys;print(json.load(open('$T/mock.json'))['files'][sys.argv[1]]['parent'])" "$1"; }
@@ -160,6 +165,7 @@ ok "designer blocked from health -> 403" 403 "$(curl -s -o /dev/null -w '%{http_
 ok "designer blocked from the self-test -> 403" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" -H "X-LH-CSRF: x" -X POST -H 'Content-Type: application/json' -d '{}' "$B/api/selftest.php")"
 ok "designer blocked from user list -> 403" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" "$B/api/users.php")"
 ok "designer can list files" 200 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" "$B/api/files.php?client=cli0001")"
+ok "a designer cannot read the queue" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" "$B/api/brands.php?pending=1")"
 CS2=$(echo "$R" | jget csrf)
 ok "designer sees the shared brand" 1 "$(curl -s -b "$T/cj2" "$B/api/brands.php" | python3 -c 'import sys,json;print(sum(1 for b in json.load(sys.stdin)["brands"] if b["id"]=="solid01"))')"
 ok "designer can save a brand" 200 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" -H "X-LH-CSRF: $CS2" -X POST -H 'Content-Type: application/json' -d '{"action":"save","base_version":1,"brand":{"id":"solid01","name":"Solid Semi","notes":"by designer"}}' "$B/api/brands.php")"

@@ -12,6 +12,10 @@ declare(strict_types=1);
 require __DIR__ . '/_lib.php';
 $method = $_SERVER['REQUEST_METHOD'] ?? '';
 $x = db();
+if ($method === 'GET' && !empty($_GET['pending'])) {
+  require_admin();
+  out(200, ['pending' => $x->query('SELECT id,zoho_id,kind,reason,tries,created_at FROM lh_pending ORDER BY id DESC LIMIT 100')->fetchAll()]);
+}
 if ($method === 'GET' && !empty($_GET['deleted'])) {
   require_admin();
   $rows = $x->query('SELECT d.id,d.name,d.deleted_at,u.name AS by_name FROM lh_deleted d LEFT JOIN lh_users u ON u.id=d.deleted_by ORDER BY d.deleted_at DESC')->fetchAll();
@@ -27,6 +31,10 @@ require_method('POST');
 $user = require_login(true);
 $b = body_json();
 $act = (string)($b['action'] ?? '');
+if ($act === 'retry_pending') {
+  require_admin(true);
+  out(200, ['ok' => true] + process_pending(25, true));
+}
 if ($act === 'restore') {
   require_admin(true);
   $id = (string)($b['id'] ?? '');
@@ -73,7 +81,7 @@ if ($act === 'delete') {
       $x->prepare('DELETE FROM lh_files WHERE client_key=?')->execute([$id]);
     } else {
       queue_trash($f['zoho_id'], 'folder', 'HTTP ' . $code . ' ' . $raw);
-      $res['warning'] = 'The client was removed, but Zoho did not move its folder to the trash yet (HTTP ' . $code . '). It will be retried automatically; you can also delete the folder in WorkDrive by hand.';
+      $res['warning'] = 'The client was removed, but Zoho did not move its folder to the trash (HTTP ' . $code . '). Zoho said: ' . substr(preg_replace('/\\s+/', ' ', $raw), 0, 160) . ' – see "Zoho clean-up queue" on the admin page, or delete the folder in WorkDrive by hand.';
     }
   }
   process_pending();

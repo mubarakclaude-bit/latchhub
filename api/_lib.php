@@ -343,12 +343,14 @@ function trash_brand_files(array $ids, string $brandKey): int {
   return $n;
 }
 /* retry what could not be trashed earlier (Zoho down, busy…) */
-function process_pending(int $max = 5): void {
+function process_pending(int $max = 5, bool $force = false): array {
+  $done = 0; $failed = 0;
   try {
-    foreach (db()->query('SELECT id,zoho_id,kind,tries FROM lh_pending WHERE tries < 8 ORDER BY id LIMIT ' . (int)$max)->fetchAll() as $r) {
+    foreach (db()->query('SELECT id,zoho_id,kind,tries FROM lh_pending ' . ($force ? '' : 'WHERE tries < 8 ') . 'ORDER BY id LIMIT ' . (int)$max)->fetchAll() as $r) {
       [$ok, $code, $raw] = zoho_trash($r['zoho_id']);
-      if ($ok) { db()->prepare('DELETE FROM lh_pending WHERE id=?')->execute([$r['id']]); db()->prepare('DELETE FROM lh_files WHERE zoho_id=?')->execute([$r['zoho_id']]); cache_forget($r['zoho_id']); }
-      else db()->prepare('UPDATE lh_pending SET tries=tries+1, reason=? WHERE id=?')->execute([substr('HTTP ' . $code . ' ' . $raw, 0, 250), $r['id']]);
+      if ($ok) { $done++; db()->prepare('DELETE FROM lh_pending WHERE id=?')->execute([$r['id']]); db()->prepare('DELETE FROM lh_files WHERE zoho_id=?')->execute([$r['zoho_id']]); cache_forget($r['zoho_id']); }
+      else { $failed++; db()->prepare('UPDATE lh_pending SET tries=tries+1, reason=? WHERE id=?')->execute([substr('HTTP ' . $code . ' ' . $raw, 0, 250), $r['id']]); }
     }
   } catch (Throwable $e) { error_log('LatchHub pending: ' . $e->getMessage()); }
+  return ['done' => $done, 'failed' => $failed];
 }
