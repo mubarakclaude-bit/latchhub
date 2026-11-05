@@ -5,7 +5,7 @@ PHP=${PHP:-php}; ROOT=$(cd "$(dirname "$0")/.." && pwd)
 T=$(mktemp -d); SITE=$T/public_html; mkdir -p "$SITE"; cp -R "$ROOT/api" "$SITE/api"; cp "$ROOT/index.php" "$SITE/index.php"; printf '<!doctype html><title>APP</title><body>APP-MARKER</body>' > "$SITE/index.html"
 cp "$ROOT/serve.php" "$SITE/serve.php"; mkdir -p "$SITE/assets/kaynes" "$SITE/assets/latchhub"; echo '<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>' > "$SITE/assets/kaynes/logo.svg"; echo '<svg xmlns="http://www.w3.org/2000/svg"/>' > "$SITE/assets/latchhub/favicon.svg"; echo '{"brands":[{"name":"Secret Client"}]}' > "$SITE/brand-hub-data.json"; echo '<?php echo "pwned";' > "$SITE/assets/kaynes/evil.php"; echo hidden > "$SITE/assets/.secret"
 cat > "$T/lh-config.php" <<C
-<?php return ['db'=>['dsn'=>'sqlite:$T/t.db'],'zoho'=>['client_id'=>'cid','client_secret'=>'sec','refresh_token'=>'RT','root_folder_id'=>'ROOT000000001','accounts'=>'http://127.0.0.1:8901','api'=>'http://127.0.0.1:8901/workdrive/api/v1','download'=>'http://127.0.0.1:8901/v1/workdrive/download/'],'setup_token'=>'0123456789abcdef0123','max_upload_mb'=>50];
+<?php return ['db'=>['dsn'=>'sqlite:$T/t.db'],'zoho'=>['client_id'=>'cid','client_secret'=>'sec','refresh_token'=>'RT','root_folder_id'=>'ROOT000000001','accounts'=>'http://127.0.0.1:8901','api'=>'http://127.0.0.1:8901/workdrive/api/v1','download'=>'http://127.0.0.1:8901/v1/workdrive/download/'],'setup_token'=>'0123456789abcdef0123','max_upload_mb'=>50,'folder_check_ttl'=>2];
 C
 MOCK_STATE=$T/mock.json $PHP -d upload_max_filesize=64M -d post_max_size=64M -S 0.0.0.0:8901 "$ROOT/tests/mock_zoho.php" >/dev/null 2>&1 & P1=$!
 $PHP -d upload_max_filesize=64M -d post_max_size=64M -d memory_limit=1024M -S 127.0.0.1:8902 -t "$SITE" >/dev/null 2>&1 & P2=$!
@@ -78,6 +78,18 @@ ok "every upload returned a Zoho file id" 4 "$(for u in "$U" "$U2" "$U3" "$U4"; 
 ok ".php upload refused" 415 "$(code "${H[@]}" -F client=cli0001 -F file=@"$T/evil.php" "$B/api/upload.php")"
 ok "bad client key refused" 400 "$(code "${H[@]}" -F 'client=../x' -F file=@"$T/logo.png" "$B/api/upload.php")"
 ok "upload without CSRF -> 403" 403 "$(code -F client=cli0001 -F file=@"$T/logo.png" "$B/api/upload.php")"
+echo "big files go up in pieces"
+head -c 3200000 /dev/urandom > "$T/chunky.bin"; rm -f "$T"/part_*; split -b 1048576 "$T/chunky.bin" "$T/part_"
+CID=$(python3 -c "import secrets;print(secrets.token_hex(12))"); N=$(ls "$T"/part_* | wc -l | tr -d ' '); i=0; LASTR=""
+for p in "$T"/part_*; do LASTR=$(curl -s -b "$J" "${H[@]}" -F client=chunkbr1 -F client_name="Chunky" -F kind=asset -F folder="Brand book" -F filename=chunky.zip -F chunk_id=$CID -F chunk_index=$i -F chunk_total=$N -F file=@"$p" "$B/api/upload.php"); i=$((i+1)); done
+ok "a file sent in pieces is put back together" 3200000 "$(echo "$LASTR" | jget stored_bytes)"
+ok "  … and lands in Zoho at the right size" 3200000 "$(python3 -c "import json,base64;d=json.load(open('$T/mock.json'))['files'];print([len(base64.b64decode(v['data'])) for v in d.values() if v['name']=='chunky.zip'][0])")"
+ok "  … the temporary pieces are cleaned up" 0 "$(find "$T/lh-cache/tmp" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')"
+CID2=$(python3 -c "import secrets;print(secrets.token_hex(12))"); MR=""
+for k in 0 2; do MR=$(curl -s -b "$J" "${H[@]}" -F client=chunkbr1 -F kind=asset -F filename=gap.zip -F chunk_id=$CID2 -F chunk_index=$k -F chunk_total=3 -F file=@"$T/part_aa" "$B/api/upload.php"); done
+ok "a missing piece is reported, not silently stored" 1 "$(echo "$MR" | python3 -c 'import sys,json;print(1 if "missing" in json.load(sys.stdin).get("error","") else 0)')"
+ok "an invalid upload id is refused" 400 "$(curl -s -o /dev/null -w '%{http_code}' -b "$J" "${H[@]}" -F client=chunkbr1 -F kind=asset -F filename=x.zip -F chunk_id=../../etc -F chunk_index=0 -F chunk_total=1 -F file=@"$T/part_aa" "$B/api/upload.php")"
+ER=$(curl -s -X POST -b "$J" "${H[@]}" "$B/api/upload.php"); ok "an upload that arrives empty gets a clear explanation" 1 "$(echo "$ER" | python3 -c 'import sys,json;print(1 if "arrived empty" in json.load(sys.stdin).get("error","") else 0)')"
 echo "list & download"
 L=$(curl -s -b "$J" "$B/api/files.php?client=cli0001"); echo "$L" > "$T/last"; python3 -c "import json;d=json.load(open('$T/mock.json'));print('  mock state:',[(k,v['name'],v['parent']) for k,v in d['files'].items() if not k.startswith(('ROOT','OTHER','SECRET'))])"; ok "client folder lists 4 files" 4 "$(echo "$L" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["files"]))')"
 ok "folder was named after the client" "Kaynes Technology" "$(sqlite3 "$T/t.db" "select name from lh_folders where client_key='cli0001'" 2>/dev/null || echo "Kaynes Technology")"
@@ -152,6 +164,29 @@ ok "  … and it warns about the clash" 1 "$(echo "$RC" | python3 -c 'import sys
 ok "  … the folder keeps its previous name" "New Name" "$(MOCKNAME "$PARENT")"
 SV '{"action":"save","base_version":0,"brand":{"id":"nofolder1","name":"A","logos":[]}}' > /dev/null
 RS=$(SV '{"action":"save","base_version":1,"brand":{"id":"nofolder1","name":"B","logos":[]}}'); ok "renaming a client that has no Zoho folder yet is fine" 2 "$(echo "$RS" | jget version)"
+echo "folders deleted by hand in WorkDrive"
+HANDTRASH(){ curl -s -o /dev/null -X PATCH -H 'Authorization: Zoho-oauthtoken TESTTOKEN' -H 'Content-Type: application/vnd.api+json' -d '{"data":{"attributes":{"status":"51"},"type":"files"}}' "http://127.0.0.1:8901/workdrive/api/v1/files/$1"; }
+MOCKPAR(){ python3 -c "import json,sys;print(json.load(open('$T/mock.json'))['files'][sys.argv[1]]['parent'])" "$1"; }
+UPM(){ curl -s -b "$J" "${H[@]}" -F client=hand001 -F client_name="By Hand" -F kind=asset -F folder="Brand assets" -F file=@"$1" "$B/api/upload.php"; }
+echo one > "$T/h1.txt"; echo two > "$T/h2.txt"; echo three > "$T/h3.txt"
+HA=$(UPM "$T/h1.txt" | jget id); HSUB=$(MOCKPAR "$HA"); HCLI=$(MOCKPAR "$HSUB")
+HANDTRASH "$HCLI"
+HB=$(UPM "$T/h2.txt"); ok "client folder deleted by hand: the next upload still works" True "$(echo "$HB" | jget ok)"
+HBID=$(echo "$HB" | jget id); HSUB2=$(MOCKPAR "$HBID"); HCLI2=$(MOCKPAR "$HSUB2")
+ok "  … into a fresh client folder" 1 "$([ "$HCLI2" != "$HCLI" ] && [ -n "$HCLI2" ] && echo 1 || echo 0)"
+ok "  … that carries the client's name" "By Hand" "$(MOCKNAME "$HCLI2")"
+ok "  … and the app remembers the new folder" "$HCLI2" "$(sqlite3 "$T/t.db" "select zoho_id from lh_folders where client_key='hand001'")"
+HANDTRASH "$HSUB2"; sleep 3
+HC=$(UPM "$T/h3.txt"); ok "only the sub-folder deleted by hand: the next upload still works" True "$(echo "$HC" | jget ok)"
+HCID=$(echo "$HC" | jget id); ok "  … into a fresh sub-folder under the same client folder" 1 "$([ "$(MOCKPAR "$HCID")" != "$HSUB2" ] && [ "$(MOCKPAR "$(MOCKPAR "$HCID")")" = "$HCLI2" ] && echo 1 || echo 0)"
+echo four > "$T/h4.txt"; echo five > "$T/h5.txt"
+UPM "$T/h4.txt" > /dev/null; HANDTRASH "$HCLI2"                      # the app has just checked this folder, so it trusts it for a moment…
+H5=$(UPM "$T/h5.txt"); ok "deleted by hand right after a check: the failed upload is retried with fresh folders" True "$(echo "$H5" | jget ok)"
+HCLI3=$(MOCKPAR "$(MOCKPAR "$(echo "$H5" | jget id)")"); ok "  … and it went to a new client folder" 1 "$([ -n "$HCLI3" ] && [ "$HCLI3" != "$HCLI2" ] && echo 1 || echo 0)"
+SV '{"action":"save","base_version":0,"brand":{"id":"hand001","name":"By Hand","logos":[]}}' > /dev/null
+HANDTRASH "$HCLI3"
+RDH=$(curl -s -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"action":"delete","id":"hand001"}' "$B/api/brands.php"); ok "deleting a client whose folder is already gone is clean" True "$(echo "$RDH" | jget trashed_folder)"
+ok "  … nothing is left waiting in the queue for it" 0 "$(sqlite3 "$T/t.db" "select count(*) from lh_pending where zoho_id='$HCLI3'")"
 ok "admin can delete a brand" 200 "$(curl -s -o /dev/null -w '%{http_code}' -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"action":"delete","id":"solid01"}' "$B/api/brands.php")"
 R4=$(BR '{"action":"save","base_version":0,"brand":{"id":"solid01","name":"Solid Semi","colors":[]}}'); ok "re-create after delete (for the designer checks)" 1 "$(echo "$R4" | jget version)"
 curl -s -b "$J" "$B/api/download.php?id=$FID" -o "$T/dl.jpg"; ok "download returns the stored (compressed) bytes" "$(echo "$U" | jget stored_bytes)" "$(wc -c < "$T/dl.jpg" | tr -d ' ')"

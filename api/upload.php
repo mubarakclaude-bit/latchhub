@@ -11,16 +11,39 @@ require __DIR__ . '/_lib.php';
 require_method('POST');
 $user = require_login(true);
 @set_time_limit(600);   /* big brand books: do not let the host's default script time limit cut the transfer to Zoho short */
-/* a file bigger than post_max_size arrives as an empty request – say so instead of a confusing 'missing client' */
-if (empty($_POST) && empty($_FILES) && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
-  out(413, ['error' => 'The file is larger than this server allows (post_max_size=' . ini_get('post_max_size') . ', upload_max_filesize=' . ini_get('upload_max_filesize') . '). Raise both in hPanel → PHP Configuration (64M is a good value).']);
+/* a request with nothing in it: a file bigger than the host (or its CDN) takes in one go arrives like this – say so instead of a confusing 'missing client' */
+if (empty($_POST) && empty($_FILES)) {
+  out(413, ['error' => 'The upload arrived empty: the file is almost certainly bigger than this host accepts in one request (post_max_size=' . ini_get('post_max_size') . ', upload_max_filesize=' . ini_get('upload_max_filesize') . ', request size ' . (int)($_SERVER['CONTENT_LENGTH'] ?? 0) . ' bytes). Big files are sent in pieces by the current app: reload the page with Cmd+Shift+R and try again.']);
 }
 $cfg = cfg();
 $key = (string)($_POST['client'] ?? '');
-if (!valid_client_key($key)) out(400, ['error' => 'Missing or invalid client.']);
+if (!valid_client_key($key)) out(400, ['error' => 'Missing or invalid client (received: "' . substr($key, 0, 40) . '").']);
 $k = (string)($_POST['kind'] ?? 'auto');
 $kind = in_array($k, ['creative', 'auto', 'asset'], true) ? $k : 'auto';
 $f = $_FILES['file'] ?? null;
+/* chunked upload: the file comes as chunk_total pieces; the last one triggers assembly and the normal processing below */
+$chunkId = (string)($_POST['chunk_id'] ?? '');
+if ($chunkId !== '') {
+  if (!preg_match('/^[a-f0-9]{16,40}$/', $chunkId)) out(400, ['error' => 'Bad upload id.']);
+  $idx = (int)($_POST['chunk_index'] ?? -1); $tot = (int)($_POST['chunk_total'] ?? 0);
+  if ($tot < 1 || $tot > 500 || $idx < 0 || $idx >= $tot) out(400, ['error' => 'Bad piece numbers.']);
+  if (!$f || ($f['error'] ?? 4) !== UPLOAD_ERR_OK) out(400, ['error' => 'Piece ' . ($idx + 1) . ' of ' . $tot . ' was not received (' . (($f['error'] ?? 4) === 1 ? 'bigger than upload_max_filesize=' . ini_get('upload_max_filesize') : 'error ' . ($f['error'] ?? 4)) . ').']);
+  $base = chunk_base();
+  if ($idx === 0) chunk_cleanup_old($base);
+  $dir = $base . '/' . (int)$user['id'] . '-' . $chunkId;
+  if (!is_dir($dir) && !@mkdir($dir, 0700, true)) out(500, ['error' => 'The server could not store the upload (no writable temporary folder).']);
+  if (!@move_uploaded_file($f['tmp_name'], $dir . '/' . $idx) && !@copy($f['tmp_name'], $dir . '/' . $idx)) out(500, ['error' => 'The server could not save piece ' . ($idx + 1) . '.']);
+  if ($idx < $tot - 1) out(200, ['ok' => true, 'piece' => $idx + 1, 'of' => $tot]);
+  register_shutdown_function(function () use ($dir) { rrmdir($dir); });
+  $asm = $dir . '/assembled'; $o = fopen($asm, 'wb');
+  for ($i = 0; $i < $tot; $i++) {
+    $pp = $dir . '/' . $i;
+    if (!is_file($pp)) { fclose($o); out(400, ['error' => 'Piece ' . ($i + 1) . ' of ' . $tot . ' is missing – please try again.']); }
+    $in = fopen($pp, 'rb'); stream_copy_to_stream($in, $o); fclose($in); @unlink($pp);
+  }
+  fclose($o);
+  $f = ['name' => (string)($_POST['filename'] ?? 'upload'), 'tmp_name' => $asm, 'size' => (int)filesize($asm), 'error' => UPLOAD_ERR_OK];
+}
 if (!$f || ($f['error'] ?? 4) !== UPLOAD_ERR_OK) {
   $why = [1 => 'larger than the server upload limit', 2 => 'larger than the form limit', 3 => 'only partly uploaded', 4 => 'no file received'][$f['error'] ?? 4] ?? 'upload failed';
   out(400, ['error' => 'The file was not accepted: ' . $why . '.']);
@@ -46,10 +69,16 @@ if ($kind !== 'asset') {
 $bytes = (int)filesize($send);
 
 /* send to the client's Zoho folder */
-$folder = client_folder($key, (string)($_POST['client_name'] ?? $key), true);
+$cf = client_folder($key, (string)($_POST['client_name'] ?? $key), true);
 $subPath = trim((string)($_POST['folder'] ?? ''));
-if ($subPath !== '') $folder = ensure_path($folder, $subPath, true);
+$folder = $subPath !== '' ? ensure_path($cf, $subPath, true) : $cf;
 [$st, $raw, $j] = zoho_upload($folder, $send, $sendName);
+if (in_array($st, [400, 404, 409, 422], true)) {   /* perhaps the target folder was deleted by hand in WorkDrive a moment ago: forget the remembered ids and try once more with fresh folders */
+  forget_folder_ids([$folder, $cf]);
+  $cf = client_folder($key, (string)($_POST['client_name'] ?? $key), true);
+  $folder = $subPath !== '' ? ensure_path($cf, $subPath, true) : $cf;
+  [$st, $raw, $j] = zoho_upload($folder, $send, $sendName);
+}
 if ($cleanup) @unlink($cleanup);
 if (!in_array($st, [200, 201], true)) { error_log('LatchHub upload: ' . $st . ' ' . substr($raw, 0, 300)); out(502, ['error' => 'Zoho did not accept the upload (HTTP ' . $st . ').', 'status' => $st, 'detail' => substr($raw, 0, 300)]); }
 $id = pick_id($j) ?? '';

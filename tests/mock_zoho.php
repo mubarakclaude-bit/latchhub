@@ -38,7 +38,7 @@ if ($path === '/workdrive/api/v1/files' && $m === 'POST') {
   $st['files'][$id] = ['name' => $b['name'], 'parent' => $b['parent_id'], 'folder' => true]; $save(); $j(['data' => $item($id)], 201);
 }
 if ($path === '/workdrive/api/v1/upload' && $m === 'POST') {
-  $f = $_FILES['content'] ?? null; if (!$f || !isset($st['files'][$_POST['parent_id'] ?? ''])) $j(['errors' => []], 400);
+  $f = $_FILES['content'] ?? null; if (!$f || !isset($st['files'][$_POST['parent_id'] ?? '']) || !empty($st['files'][$_POST['parent_id']]['trashed'])) $j(['errors' => [['id' => 'F6014', 'title' => 'Parent folder not found']]], 400);
   $id = 'NEWFILE' . (++$st['n']) . '0000'; $st['files'][$id] = ['name' => urldecode($_POST['filename'] ?? $f['name']), 'parent' => $_POST['parent_id'], 'folder' => false, 'data' => base64_encode(file_get_contents($f['tmp_name']))];
   $save(); $j(['data' => [['attributes' => ['resource_id' => $id, 'FileName' => $st['files'][$id]['name']]]]], 200);
 }

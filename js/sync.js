@@ -40,26 +40,46 @@ const LHsync={
   extFor(mime){return({'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/svg+xml':'svg','image/gif':'gif','application/pdf':'pdf','font/ttf':'ttf','font/otf':'otf','font/woff':'woff','font/woff2':'woff2'})[mime]||''},
   async uploadBlob(b,blob,filename,folder){
     const ext=this.extFor(blob.type);if(ext&&!/\.[A-Za-z0-9]{2,5}$/.test(filename))filename+='.'+ext;
-    const fd=new FormData();fd.append('client',b.id);fd.append('client_name',b.name);fd.append('kind',blob.type==='application/pdf'?'auto':'asset');fd.append('folder',folder);fd.append('file',blob,filename);
-    const r=await fetch('api/upload.php',{method:'POST',credentials:'same-origin',headers:{'X-LH-CSRF':this.csrf},body:fd});
-    let j={};try{j=await r.json()}catch{}
-    if(!r.ok||!j.id)throw new Error('could not upload "'+filename+'" to Zoho: '+(j.error||j.warning||('server answered '+r.status+(r.status===413?' – the file is bigger than the server allows':'')))+(j.detail?' – Zoho said: '+j.detail:''));
-    return 'api/download.php?id='+encodeURIComponent(j.id)},
+    const MB=n=>(n/1048576).toFixed(1)+' MB',what='"'+filename+'" ('+MB(blob.size)+')',kind=blob.type==='application/pdf'?'auto':'asset';
+    const fields=fd=>{fd.append('client',b.id);fd.append('client_name',b.name);fd.append('kind',kind);fd.append('folder',folder)};
+    /* network hiccups and server errors are retried; refusals (4xx) are final */
+    const post=async fd=>{let last={};for(let t=0;t<3;t++){try{const r=await fetch('api/upload.php',{method:'POST',credentials:'same-origin',headers:{'X-LH-CSRF':this.csrf},body:fd});let j={};try{j=await r.json()}catch{}last={r,j};if(r.status<500)return last}catch(e){last={err:e}}await new Promise(x=>setTimeout(x,900*(t+1)))}return last};
+    const fail=res=>{const r=res.r,j=res.j||{};throw new Error('could not upload '+what+' to Zoho: '+(res.err?'the connection to the server failed ('+res.err.message+')':(j.error||j.warning||('server answered '+r.status+(r.status===413?' – the file is bigger than the server allows':''))))+(j.detail?' – Zoho said: '+j.detail:''))};
+    let res;
+    if(blob.size>12*1048576){                       /* big files go up in pieces, so no single request is too large for the host or its CDN */
+      const id=[...crypto.getRandomValues(new Uint8Array(12))].map(x=>x.toString(16).padStart(2,'0')).join(''),CH=6*1048576,n=Math.ceil(blob.size/CH);
+      for(let i=0;i<n;i++){
+        this.status('Saving '+filename+' to Zoho… piece '+(i+1)+'/'+n);
+        const fd=new FormData();fields(fd);fd.append('filename',filename);fd.append('chunk_id',id);fd.append('chunk_index',i);fd.append('chunk_total',n);fd.append('file',blob.slice(i*CH,(i+1)*CH),'piece');
+        res=await post(fd);if(!res.r||!res.r.ok)fail(res)}
+    }else{const fd=new FormData();fields(fd);fd.append('file',blob,filename);res=await post(fd);if(!res.r||!res.r.ok)fail(res)}
+    if(!res.j.id)throw new Error('could not upload '+what+' to Zoho: '+(res.j.warning||'Zoho gave no file id'));
+    return 'api/download.php?id='+encodeURIComponent(res.j.id)},
   /* move this brand's inline files into Zoho; the brand then only holds links */
   async pushFiles(b){
-    const jobs=this.collect(b),book=b.book&&b.book.blobKey&&!b.book.url?b.book:null,total=jobs.length+(book?1:0);let n=0;
+    const failed=[],jobs=this.collect(b),book=b.book&&b.book.blobKey&&!b.book.url?b.book:null,total=jobs.length+(book?1:0);let n=0;
     for(const j of jobs){this.status('Saving files to Zoho… '+(++n)+'/'+total);
-      const blob=await (await fetch(j.holder[j.key])).blob();
-      j.holder[j.key]=await this.uploadBlob(b,blob,j.name,j.folder)}
+      try{const blob=await (await fetch(j.holder[j.key])).blob();j.holder[j.key]=await this.uploadBlob(b,blob,j.name,j.folder)}catch(e){failed.push(e.message)}}
     if(book){this.status('Saving files to Zoho… '+(++n)+'/'+total);
-      let f=await DB.get(book.blobKey);if(!f)throw new Error('The brand book file is no longer in this browser');
-      if(f.size>8e6&&typeof PDFT!=='undefined'){try{const c=await PDFT.compress(f,{min:8e6,target:12e6,prog:t=>this.status(t)});f=c.file}catch{}}   /* safety net: a brand book that is still heavy is shrunk before it goes to Zoho */
-      book.url=await this.uploadBlob(b,f,book.filename||'brand-book.pdf','Brand book');delete book.blobKey}
-    if(total)DB.set('state',S).catch(()=>{})},
+      try{
+        let f=await DB.get(book.blobKey);if(!f)throw new Error('The brand book file is no longer in this browser');
+        if(f.size>8e6&&typeof PDFT!=='undefined'){try{const c=await PDFT.compress(f,{min:8e6,target:12e6,prog:t=>this.status(t)});f=c.file}catch{}}   /* safety net: a brand book that is still heavy is shrunk before it goes to Zoho */
+        book.url=await this.uploadBlob(b,f,book.filename||'brand-book.pdf','Brand book');delete book.blobKey
+      }catch(e){failed.push(e.message)}}
+    if(total)DB.set('state',S).catch(()=>{});
+    return failed},
+  /* a copy of the brand without the files that are still only inside this browser, so the client can already be saved for the whole team */
+  stripInline(b){
+    const c=JSON.parse(JSON.stringify(b)),big=v=>typeof v==='string'&&v.startsWith('data:')&&v.length>8000;
+    c.logos=(c.logos||[]).map(l=>{if(big(l.data))l.data='';if(big(l.source))l.source=null;l.formats=(l.formats||[]).filter(f=>!big(f.url));return l}).filter(l=>(l.formats&&l.formats.length)||l.data);
+    c.elements=(c.elements||[]).map(e=>{e.formats=(e.formats||[]).filter(f=>!big(f.url));if(big(e.file))e.file=null;return e}).filter(e=>(e.formats&&e.formats.length)||e.css||e.preview);
+    (c.fonts||[]).forEach(f=>{if(big(f.file))f.file=null});
+    if(c.book&&c.book.blobKey&&!c.book.url)delete c.book;
+    return c},
   async flush(){
     if(!this.on)return;
     if(this.busy){this.again=true;return}
-    this.busy=true;this.failed=false;let trashed=0,renamed=false;const el0=document.getElementById('lh-sync');if(el0){el0.onclick=null;el0.style.cursor='';el0.style.textDecoration=''}
+    this.busy=true;this.failed=false;let trashed=0,renamed=false;const partial=[];const el0=document.getElementById('lh-sync');if(el0){el0.onclick=null;el0.style.cursor='';el0.style.textDecoration=''}
     try{
       const ids=new Set(S.brands.map(b=>b.id));
       for(const id of Object.keys(this.ver)){if(ids.has(id))continue;
@@ -68,22 +88,23 @@ const LHsync={
       for(const b of S.brands.slice()){
         if(this.hash[b.id]===this.h(b))continue;
         try{
-          this.status('Saving…');await this.pushFiles(b);
-          const r=await this.api('brands.php',{action:'save',brand:b,base_version:this.ver[b.id]||0});
-          this.ver[b.id]=r.version;this.hash[b.id]=this.h(b);trashed+=r.trashed||0;if(r.warning)toast(r.warning,12000);if(r.renamed)renamed=true;
+          this.status('Saving…');const bad=await this.pushFiles(b);
+          const r=await this.api('brands.php',{action:'save',brand:bad.length?this.stripInline(b):b,base_version:this.ver[b.id]||0});
+          this.ver[b.id]=r.version;if(bad.length)partial.push({b,bad});else this.hash[b.id]=this.h(b);trashed+=r.trashed||0;if(r.warning)toast(r.warning,12000);if(r.renamed)renamed=true;
         }catch(e){
           if(e.status===409){
             const cur=e.data&&e.data.current,i=S.brands.findIndex(x=>x.id===b.id);
             if(cur&&i>=0){S.brands[i]=cur.brand;this.ver[b.id]=cur.version;this.hash[b.id]=this.h(cur.brand);toast('Someone else just changed "'+b.name+'" – showing their version');this.afterChange()}
             else if(!cur&&i>=0){S.brands.splice(i,1);delete this.ver[b.id];delete this.hash[b.id];toast('"'+b.name+'" was deleted by the admin');this.afterChange()}
           }else{this.fail(b,e);this.busy=false;return}}}
+      if(partial.length){this.fail(partial[0].b,new Error(partial.flatMap(p=>p.bad).join(' | ')),true);return}
       DB.set('state',S).catch(()=>{});this.status('✓ saved'+(trashed?' · '+trashed+' file'+(trashed>1?'s':'')+' moved to the Zoho trash':'')+(renamed?' · Zoho folder renamed':''));setTimeout(()=>{if(!this.busy)this.status('')},2500);
     }finally{this.busy=false;if(this.again){this.again=false;this.flush()}}},
   /* make a failure impossible to miss: stays in the corner, click it for details and to retry */
-  fail(b,e){
+  fail(b,e,partial){
     this.failed=true;this.lastError='"'+b.name+'": '+e.message;
-    toast('Not saved to the server – '+this.lastError,9000);this.status('⚠ not saved – click for details');
-    const el=document.getElementById('lh-sync');if(el){el.style.cursor='pointer';el.style.textDecoration='underline';el.onclick=()=>{alert('This change is NOT on the server yet.\n\n'+this.lastError+'\n\nYour work is still in this browser. Fix the cause (or tell the admin), then press OK to retry.');this.flush()}}},
+    toast((partial?'Client saved, but some files are not in Zoho yet – ':'Not saved to the server – ')+this.lastError,12000);this.status(partial?'⚠ saved, but files not uploaded – click for details':'⚠ not saved – click for details');
+    const el=document.getElementById('lh-sync');if(el){el.style.cursor='pointer';el.style.textDecoration='underline';el.onclick=()=>{alert((partial?'The client is saved and your team can see it, but these files could not be uploaded to Zoho yet:':'This change is NOT on the server yet.')+'\n\n'+this.lastError+'\n\nYour work and the files are still in this browser. Fix the cause (or tell the admin), then press OK to retry.');this.flush()}}},
   safeRender(){
     const a=document.activeElement;
     if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return;

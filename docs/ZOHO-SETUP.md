@@ -70,3 +70,10 @@ If you see 200 instead, the host is ignoring `.htaccess` rewrite rules; tell the
 
 ## Renaming a client
 Renaming a client in the app also renames its folder in WorkDrive. If WorkDrive already has a folder with the new name, the app shows a warning and the old folder name stays (nothing is lost; files keep going to the same folder).
+
+## Big files and partly failed uploads
+- Files over 12 MB are sent to the server in 6 MB pieces and put back together there, so no single request is too big for the host or its CDN (a request that arrives empty means a file was too big for one request).
+- If one file of a client cannot be uploaded to Zoho, the **client is still saved for the whole team** (without that file). The corner of the screen shows "⚠ saved, but files not uploaded – click for details" with the file name, its size and the reason; the file stays in your browser and is retried when you click it or reload.
+
+## Folders deleted by hand in WorkDrive
+The app remembers each client's Zoho folder. If someone deletes or trashes that folder (or a sub-folder) directly in WorkDrive, the next upload notices (it re-checks a remembered folder every few minutes, and retries once with fresh folders if an upload is refused) and creates a new folder with the client's name. Files that were inside the deleted folder are of course not copied back: restore them from the WorkDrive trash if you need them. Deleting a client in the app whose folder is already gone is clean (nothing stays in the queue).

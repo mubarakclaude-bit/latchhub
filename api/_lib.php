@@ -208,10 +208,28 @@ function create_folder(string $parentId, string $name): string {
   if (!in_array($s, [200, 201], true) || !$id) { error_log('LatchHub create folder: ' . substr($raw, 0, 300)); out(502, ['error' => 'Could not create the folder in Zoho.', 'status' => $s]); }
   return $id;
 }
+/* Is a remembered Zoho folder still there (not deleted or trashed by hand in WorkDrive)? Checked at most every few minutes per folder. */
+function folder_alive(string $id): bool {
+  $ttl = (int)(cfg()['folder_check_ttl'] ?? 300);
+  $k = 'fv:' . substr(md5($id), 0, 30);
+  if ($ttl > 0) { $q = db()->prepare('SELECT exp FROM lh_kv WHERE k=?'); $q->execute([$k]); if (($row = $q->fetch()) && (int)$row['exp'] > time()) return true; }
+  [$s, $j] = zoho_api('GET', '/files/' . rawurlencode($id));
+  if ($s === 0) return true;                       /* Zoho unreachable right now: a network hiccup must not make us forget the folder */
+  $a = $j['data']['attributes'] ?? [];
+  $alive = $s === 200 && !in_array((string)($a['status'] ?? '1'), ['51', '61', 'trashed', 'deleted'], true) && empty($a['trashed']) && empty($a['is_trashed']);
+  if ($alive && $ttl > 0) db()->prepare('REPLACE INTO lh_kv (k,v,exp) VALUES (?,?,?)')->execute([$k, '1', time() + $ttl]);
+  return $alive;
+}
+function forget_folder_ids(array $ids): void {
+  foreach (array_unique(array_filter($ids)) as $id) {
+    db()->prepare('DELETE FROM lh_folders WHERE zoho_id=?')->execute([$id]);
+    db()->prepare('DELETE FROM lh_kv WHERE k=?')->execute(['fv:' . substr(md5($id), 0, 30)]);
+  }
+}
 function client_folder(string $key, string $name, bool $create = true): ?string {
   $st = db()->prepare('SELECT zoho_id FROM lh_folders WHERE client_key=?');
   $st->execute([$key]);
-  if ($r = $st->fetch()) return $r['zoho_id'];
+  if ($r = $st->fetch()) { if (folder_alive($r['zoho_id'])) return $r['zoho_id']; forget_folder_ids([$r['zoho_id']]); }   /* deleted by hand: forget it, then find or create a fresh one */
   $root = cfg()['zoho']['root_folder_id'];
   $fname = safe_name($name, $key);
   foreach (zoho_list($root) as $it) { if ($it['folder'] && strcasecmp($it['name'], $fname) === 0) { db()->prepare('REPLACE INTO lh_folders (client_key,zoho_id,name) VALUES (?,?,?)')->execute([$key, $it['id'], $fname]); return $it['id']; } }
@@ -229,7 +247,7 @@ function ensure_path(string $parentId, string $path, bool $create = true): ?stri
     $key = 'p' . substr(md5($cur . '/' . strtolower($seg)), 0, 32);
     $st = db()->prepare('SELECT zoho_id FROM lh_folders WHERE client_key=?');
     $st->execute([$key]);
-    if ($r = $st->fetch()) { $cur = $r['zoho_id']; continue; }
+    if ($r = $st->fetch()) { if (folder_alive($r['zoho_id'])) { $cur = $r['zoho_id']; continue; } forget_folder_ids([$r['zoho_id']]); }
     $found = null;
     foreach (zoho_list($cur) as $it) { if ($it['folder'] && strcasecmp($it['name'], $seg) === 0) { $found = $it['id']; break; } }
     if (!$found) { if (!$create) return null; $found = create_folder($cur, $seg); }
@@ -309,7 +327,7 @@ function compress_pdf(string $tmp): ?array {
 /* Zoho "move to trash" = status 51 (restore = 1, permanent delete = 61) */
 function zoho_trash(string $id): array {
   [$st, $j, $raw] = zoho_api('PATCH', '/files/' . rawurlencode($id), ['data' => ['attributes' => ['status' => '51'], 'type' => 'files']]);
-  $already = strpos($raw, 'F221') !== false;   /* "Resource has been Trashed already" */
+  $already = strpos($raw, 'F221') !== false || $st === 404;   /* "Resource has been Trashed already", or it no longer exists (deleted by hand) */
   return [in_array($st, [200, 201, 204], true) || $already, $st, substr($raw, 0, 240)];
 }
 /* rename a file or folder in Zoho; returns [ok, http status, reply]. Zoho error R002 = a folder with that name already exists */
@@ -353,4 +371,20 @@ function process_pending(int $max = 5, bool $force = false): array {
     }
   } catch (Throwable $e) { error_log('LatchHub pending: ' . $e->getMessage()); }
   return ['done' => $done, 'failed' => $failed];
+}
+
+/* ---------- big uploads arrive in small pieces and are put back together here ---------- */
+function chunk_base(): string {
+  $cp = cfg_path();
+  $b = ($cp ? dirname($cp) . '/lh-cache' : sys_get_temp_dir() . '/lh-chunks') . '/tmp';
+  if (!is_dir($b)) @mkdir($b, 0700, true);
+  return $b;
+}
+function rrmdir(string $d): void {
+  if (!is_dir($d)) return;
+  foreach (scandir($d) ?: [] as $x) { if ($x === '.' || $x === '..') continue; $p = $d . '/' . $x; is_dir($p) ? rrmdir($p) : @unlink($p); }
+  @rmdir($d);
+}
+function chunk_cleanup_old(string $base): void {   /* abandoned uploads older than a day */
+  foreach (glob($base . '/*', GLOB_ONLYDIR) ?: [] as $d) { if (filemtime($d) < time() - 86400) rrmdir($d); }
 }
