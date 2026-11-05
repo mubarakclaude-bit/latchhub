@@ -22,7 +22,7 @@ if ($act === 'create') {
   $checkPw((string)($b['password'] ?? ''));
   $c = $x->prepare('SELECT COUNT(*) c FROM lh_users WHERE active=1');
   $c->execute();
-  if ($role === 'designer' && (int)$c->fetch()['c'] >= 5) out(400, ['error' => 'The team is set to one admin plus four designers. Switch someone off first.']);
+  if ($role === 'designer' && (int)$c->fetch()['c'] >= 11) out(400, ['error' => 'The team is set to one admin plus ten designers. Switch someone off first.']);
   try { $x->prepare('INSERT INTO lh_users (email,name,role,pass_hash,active,created_at) VALUES (?,?,?,?,1,?)')->execute([$email, $name, $role, password_hash((string)$b['password'], PASSWORD_DEFAULT), now()]); }
   catch (Throwable $e) { out(409, ['error' => 'That email already has an account.']); }
   log_activity('user_created', $me, ['details' => $name . ' <' . $email . '> as ' . $role]);

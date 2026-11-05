@@ -356,6 +356,11 @@ async function fileToCanvases(file){
 }
 
 /* ================= APP STATE & UI ================= */
+function changePw(){const bar=document.getElementById('lh-user');if(!bar)return;const o=document.createElement('div');o.style.cssText='position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px';
+  o.innerHTML='<form style="background:var(--surface,#fff);color:var(--ink,#111);padding:20px;max-width:340px;width:100%;display:grid;gap:10px;font:14px system-ui,sans-serif"><b>Change password</b><input type="password" id="pw0" placeholder="Old password" autocomplete="current-password" required><input type="password" id="pw1" placeholder="New password (10+ characters)" minlength="10" autocomplete="new-password" required><input type="password" id="pw2" placeholder="New password again" minlength="10" autocomplete="new-password" required><div id="pwm" style="min-height:18px;font-size:12px"></div><div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn sm" id="pwx">Cancel</button><button class="btn sm pri">Change</button></div></form>';
+  document.body.appendChild(o);const m=o.querySelector('#pwm'),q=s=>o.querySelector(s);q('#pwx').onclick=()=>o.remove();q('#pw0').focus();
+  o.querySelector('form').onsubmit=async e=>{e.preventDefault();if(q('#pw1').value!==q('#pw2').value){m.textContent='The two new passwords do not match.';return}m.textContent='Saving…';
+    try{const r=await fetch('api/password.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-LH-CSRF':bar.dataset.csrf},body:JSON.stringify({old:q('#pw0').value,new:q('#pw1').value})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||('Error '+r.status));o.remove();toast('Password changed – use the new one next time you sign in')}catch(err){m.textContent=err.message}}}
 const CAN_BACKUP=()=>{const u=document.getElementById('lh-user');return !u||u.dataset.role==='admin'};
 const EDIT_ACTIONS=new Set(['logoVariants','delLink','addColor','editColor','delColor','addFont','delFont','renameLogo','delLogo','renameBrand','delEl']);
 const ui={view:'home',brandId:null,tab:'colors',edit:false,check:{brandId:null,results:[],busy:'',}};
@@ -384,7 +389,7 @@ function render(){
    <div class="tbr"><button class="tl ${ui.view==='check'?'on':''}" data-a="openCheck">Design Lens <span class="muted" style="font-size:9px">beta</span></button>
     <label class="chkl tl"><input type="checkbox" data-c="edit" ${ui.edit?'checked':''}> Edit mode</label>
     <details class="tmore"><summary class="tl">Settings</summary><div class="tpanel">${DARK_MODE?`<div class="cap2">Theme</div><div class="seg tsw">${[['light','Light'],['auto','Auto'],['dark','Dark']].map(t=>`<button class="${THEME.get()===t[0]?'on':''}" data-a="theme" data-id="${t[0]}">${t[1]}</button>`).join('')}</div>`:''}
-     <button class="btn sm" data-a="newBrand">＋ New brand</button>${CAN_BACKUP()?'<button class="btn sm" data-a="export">Backup</button><button class="btn sm" data-a="import">Restore</button>':''}</div></details>${CAN_BACKUP()?'<input type="file" id="imp" accept=".json" hidden>':''}</div>
+     <button class="btn sm" data-a="newBrand">＋ New brand</button>${document.getElementById('lh-user')?'<button class="btn sm" data-a="chPw">Change password</button>':''}${CAN_BACKUP()?'<button class="btn sm" data-a="export">Backup</button><button class="btn sm" data-a="import">Restore</button>':''}</div></details>${CAN_BACKUP()?'<input type="file" id="imp" accept=".json" hidden>':''}</div>
   </header><main class="${enter}" style="--brand:${hex}">${DEMO?'<div style="margin-bottom:14px"><span class="badge b-warn">DEMO MODE – sample clients only; your real data is untouched</span></div>':''}${ui.view==='home'?viewHome():ui.view==='check'?viewCheck():(b?viewBrand(b):viewEmpty())}</main>`;
   if(enter)window.scrollTo(0,0);
   if(ui.view==='home'&&typeof homeLogos==='function')homeLogos();
@@ -558,6 +563,7 @@ document.addEventListener('click',async e=>{
     const f={id:uid(),name,role:$('#fr').value,weights:$('#fw').value,url:$('#fu').value.trim()},file=$('#ff').files[0];
     if(file){f.file=await readFile(file);f.ext=(file.name.match(/\.\w+$/)||['.ttf'])[0];registerFont(f)}b.fonts.push(f)}
   else if(a==='delFont'){if(!confirm('Delete this font?'+(typeof LHsync!=='undefined'&&LHsync.on?' Its file in Zoho is moved to the WorkDrive trash.':'')))return;b.fonts=b.fonts.filter(x=>x.id!==id)}
+  else if(a==='chPw'){changePw();return}
   else if(a==='export'){if(!CAN_BACKUP()){toast('Only the admin can back up');return}download('brand-hub-backup.json',[JSON.stringify(S)],'application/json');return}
   else if(a==='import'){if(!CAN_BACKUP()){toast('Only the admin can restore a backup');return}$('#imp').click();return}
   else if(a==='pick'){$('#cf').click();return}

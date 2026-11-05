@@ -48,8 +48,8 @@ ok "a PHP file inside assets/ is never executed or served" 403 "$(HC -b "$J" "$B
 ok "app page carries a Sign out link" 1 "$(curl -s -b "$J" "$B/" | grep -c 'id="lh-out"')"
 ok "write without CSRF header -> 403" 403 "$(code -X POST -H 'Content-Type: application/json' -d '{}' "$B/api/users.php")"
 echo "team"
-for n in 1 2 3 4; do ok "add designer $n" 200 "$(code "${H[@]}" -X POST -H 'Content-Type: application/json' -d "$(printf '{"action":"create","name":"D%s","email":"d%s@x.com","role":"designer","password":"designer-pass-%s"}' $n $n $n)" "$B/api/users.php")"; done
-ok "5th designer refused (1 admin + 4 designers)" 400 "$(code "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"action":"create","name":"D5","email":"d5@x.com","role":"designer","password":"designer-pass-5"}' "$B/api/users.php")"
+for n in 1 2 3 4 5 6 7 8 9 10; do ok "add designer $n" 200 "$(code "${H[@]}" -X POST -H 'Content-Type: application/json' -d "$(printf '{"action":"create","name":"D%s","email":"d%s@x.com","role":"designer","password":"designer-pass-%s"}' $n $n $n)" "$B/api/users.php")"; done
+ok "11th designer refused (1 admin + 10 designers)" 400 "$(code "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"action":"create","name":"D11","email":"d11@x.com","role":"designer","password":"designer-pass-11"}' "$B/api/users.php")"
 ok "short password refused" 400 "$(code "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"action":"password","id":2,"password":"short"}' "$B/api/users.php")"
 echo "zoho health"
 H2=$(curl -s -b "$J" "$B/api/health.php"); ok "health: all required ok" True "$(echo "$H2" | jget all_ok)"
@@ -229,6 +229,15 @@ ok "unknown browser events are refused" 400 "$(curl -s -o /dev/null -w '%{http_c
 ok "browser event without CSRF -> 403" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" -X POST -H 'Content-Type: application/json' -d '{"action":"svg_download"}' "$B/api/activity.php")"
 ok "the designer's event shows under the designer's name" 1 "$([ "$(AL 'action=svg_download' | cnt)" -ge 1 ] && echo 1 || echo 0)"
 ok "spreadsheet formulas are neutralised in CSV" 0 "$(curl -s -b "$J" "$B/api/activity.php?format=csv" | grep -c '^[^,]*,[^,]*,[^,]*,[^,]*,=HYPERLINK\|,"=HYPERLINK')"
+echo "change own password"
+PW(){ curl -s -o "$T/last" -w '%{http_code}' -b "$T/cj2" -H "X-LH-CSRF: $CS2" -X POST -H 'Content-Type: application/json' -d "$1" "$B/api/password.php"; }
+ok "wrong old password refused" 400 "$(PW '{"old":"wrong-wrong-1","new":"brand-new-pass-9"}')"
+ok "short new password refused" 400 "$(PW '{"old":"designer-pass-1","new":"short"}')"
+ok "same password refused" 400 "$(PW '{"old":"designer-pass-1","new":"designer-pass-1"}')"
+ok "password change needs CSRF" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" -X POST -H 'Content-Type: application/json' -d '{}' "$B/api/password.php")"
+ok "designer changes own password" 200 "$(PW '{"old":"designer-pass-1","new":"brand-new-pass-9"}')"
+ok "old password no longer signs in" 401 "$(code -X POST -H 'Content-Type: application/json' -d '{"email":"d1@x.com","password":"designer-pass-1"}' "$B/api/login.php")"
+ok "new password signs in" 200 "$(code -X POST -H 'Content-Type: application/json' -d '{"email":"d1@x.com","password":"brand-new-pass-9"}' "$B/api/login.php")"
 echo "before the database is configured"
 T2=$(mktemp -d); mkdir -p "$T2/public_html"; cp "$ROOT/index.php" "$T2/public_html/"; cp -R "$ROOT/api" "$T2/public_html/api"; printf '<!doctype html><body>APP-MARKER</body>' > "$T2/public_html/index.html"; cp "$ROOT/serve.php" "$T2/public_html/"; mkdir -p "$T2/public_html/assets/kaynes"; echo "<svg/>" > "$T2/public_html/assets/kaynes/logo.svg"
 $PHP -S 127.0.0.1:8903 -t "$T2/public_html" >/dev/null 2>&1 & P3=$!; sleep 1
