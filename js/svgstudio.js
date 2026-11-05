@@ -108,7 +108,7 @@ async function open(b,l){
     else if(t.dataset.one){inv.forEach(o=>{map[o.hex]=t.dataset.one});draw()}
     else if('reset' in t.dataset){Object.keys(map).forEach(k=>delete map[k]);draw()}
     else if(t.dataset.bg){bg=t.dataset.bg;draw()}
-    else if(t.dataset.dl==='svg'){download(base+'.svg',[cur()],'image/svg+xml;charset=utf-8');toast('SVG downloaded')}
-    else if(t.dataset.dl==='png'){try{const blob=await png(cur(),+m.querySelector('#sv-w').value,null);download(base+'.png',[blob],'image/png');toast('PNG downloaded')}catch(err){toast('⚠ '+err.message,6000)}}});
+    else if(t.dataset.dl==='svg'){download(base+'.svg',[cur()],'image/svg+xml;charset=utf-8');toast('SVG downloaded');window.LHtrack&&LHtrack('svg_download',null,base+'.svg')}
+    else if(t.dataset.dl==='png'){try{const blob=await png(cur(),+m.querySelector('#sv-w').value,null);download(base+'.png',[blob],'image/png');toast('PNG downloaded');window.LHtrack&&LHtrack('svg_download',null,base+'.png')}catch(err){toast('⚠ '+err.message,6000)}}});
   draw()}
 return{section,open,list:listOf,src:srcOf,approved,inventory,grouped,recolour,parse,png,size}})();

@@ -356,6 +356,7 @@ async function fileToCanvases(file){
 }
 
 /* ================= APP STATE & UI ================= */
+const CAN_BACKUP=()=>{const u=document.getElementById('lh-user');return !u||u.dataset.role==='admin'};
 const EDIT_ACTIONS=new Set(['logoVariants','delLink','addColor','editColor','delColor','addFont','delFont','renameLogo','delLogo','renameBrand','delEl']);
 const ui={view:'home',brandId:null,tab:'colors',edit:false,check:{brandId:null,results:[],busy:'',}};
 const brand=()=>S.brands.find(b=>b.id===ui.brandId);
@@ -383,11 +384,11 @@ function render(){
    <div class="tbr"><button class="tl ${ui.view==='check'?'on':''}" data-a="openCheck">Design Lens <span class="muted" style="font-size:9px">beta</span></button>
     <label class="chkl tl"><input type="checkbox" data-c="edit" ${ui.edit?'checked':''}> Edit mode</label>
     <details class="tmore"><summary class="tl">Settings</summary><div class="tpanel">${DARK_MODE?`<div class="cap2">Theme</div><div class="seg tsw">${[['light','Light'],['auto','Auto'],['dark','Dark']].map(t=>`<button class="${THEME.get()===t[0]?'on':''}" data-a="theme" data-id="${t[0]}">${t[1]}</button>`).join('')}</div>`:''}
-     <button class="btn sm" data-a="newBrand">＋ New brand</button><button class="btn sm" data-a="export">Backup</button><button class="btn sm" data-a="import">Restore</button></div></details><input type="file" id="imp" accept=".json" hidden></div>
+     <button class="btn sm" data-a="newBrand">＋ New brand</button>${CAN_BACKUP()?'<button class="btn sm" data-a="export">Backup</button><button class="btn sm" data-a="import">Restore</button>':''}</div></details>${CAN_BACKUP()?'<input type="file" id="imp" accept=".json" hidden>':''}</div>
   </header><main class="${enter}" style="--brand:${hex}">${DEMO?'<div style="margin-bottom:14px"><span class="badge b-warn">DEMO MODE – sample clients only; your real data is untouched</span></div>':''}${ui.view==='home'?viewHome():ui.view==='check'?viewCheck():(b?viewBrand(b):viewEmpty())}</main>`;
   if(enter)window.scrollTo(0,0);
   if(ui.view==='home'&&typeof homeLogos==='function')homeLogos();
-  const imp=$('#imp');if(imp)imp.onchange=async e=>{try{const j=JSON.parse(await e.target.files[0].text());if(!j.brands)throw 0;S=j;S.brands.forEach(b=>b.fonts.forEach(f=>f.file&&registerFont(f)));save();ui.brandId=S.brands[0]?.id;ui.anim=true;render();toast('Restored')}catch{toast('Not a valid backup file')}};
+  const imp=$('#imp');if(imp)imp.onchange=async e=>{if(!CAN_BACKUP()){toast('Only the admin can restore a backup');return}try{const j=JSON.parse(await e.target.files[0].text());if(!j.brands)throw 0;S=j;S.brands.forEach(b=>b.fonts.forEach(f=>f.file&&registerFont(f)));save();ui.brandId=S.brands[0]?.id;ui.anim=true;render();toast('Restored')}catch{toast('Not a valid backup file')}};
 }
 function viewEmpty(){return`<div class="empty"><h2>No clients yet</h2><p>Turn on <b>Edit mode</b> to add a client, or restore your backup.</p><button class="btn pri" data-a="demo">Load demo clients</button></div>`}
 
@@ -484,6 +485,7 @@ function resCard(r,ri){
 
 async function runCheck(files){
   const b=S.brands.find(x=>x.id===ui.check.brandId);if(!b)return;
+  window.LHtrack&&LHtrack('lens_check',b,files.length+' design'+(files.length>1?'s':'')+' checked: '+files.map(f=>f.name).slice(0,3).join(', '));
   for(const f of files){
     try{ui.check.busy='Analysing '+f.name+'…';render();await tick();
       const cs=await fileToCanvases(f);
@@ -548,7 +550,7 @@ document.addEventListener('click',async e=>{
   else if(a==='ase'){download(b.name+' swatches.ase',[makeASE(b.colors)],'application/octet-stream');return}
   else if(a==='renameLogo'){const l=b.logos.find(x=>x.id===id),n=prompt('Logo name',l.name);if(n)l.name=n}
   else if(a==='svgCustom'){const l=b.logos.find(x=>x.id===id);if(l)await SVGS.open(b,l);return}
-  else if(a==='logoVariants'){const l=b.logos.find(x=>x.id===id);toast('Creating white and greyscale versions…',60000);
+  else if(a==='logoVariants'){const l=b.logos.find(x=>x.id===id);window.LHtrack&&LHtrack('logo_variants',b,'White & greyscale versions of '+(l?l.name:''));toast('Creating white and greyscale versions…',60000);
     try{const v=await logoVariants(l,b.logos);if(!v.length){toast('Nothing to add – this logo already has them, or its colours cannot be converted',6000);return}
       for(const p of v)b.logos.push(logoEntry(p,slug2(b.name)));toast(v.length+' version'+(v.length>1?'s':'')+' added: '+v.map(x=>x.name.split(' – ').pop()).join(' + '),5000)}catch(err){toast('⚠ '+err.message,6000);return}}
   else if(a==='delLogo'){if(!confirm('Delete this logo and all its files?'+(typeof LHsync!=='undefined'&&LHsync.on?' Its files in Zoho are moved to the WorkDrive trash.':'')))return;b.logos=b.logos.filter(x=>x.id!==id)}
@@ -556,8 +558,8 @@ document.addEventListener('click',async e=>{
     const f={id:uid(),name,role:$('#fr').value,weights:$('#fw').value,url:$('#fu').value.trim()},file=$('#ff').files[0];
     if(file){f.file=await readFile(file);f.ext=(file.name.match(/\.\w+$/)||['.ttf'])[0];registerFont(f)}b.fonts.push(f)}
   else if(a==='delFont'){if(!confirm('Delete this font?'+(typeof LHsync!=='undefined'&&LHsync.on?' Its file in Zoho is moved to the WorkDrive trash.':'')))return;b.fonts=b.fonts.filter(x=>x.id!==id)}
-  else if(a==='export'){download('brand-hub-backup.json',[JSON.stringify(S)],'application/json');return}
-  else if(a==='import'){$('#imp').click();return}
+  else if(a==='export'){if(!CAN_BACKUP()){toast('Only the admin can back up');return}download('brand-hub-backup.json',[JSON.stringify(S)],'application/json');return}
+  else if(a==='import'){if(!CAN_BACKUP()){toast('Only the admin can restore a backup');return}$('#imp').click();return}
   else if(a==='pick'){$('#cf').click();return}
   else return;
   save();render();

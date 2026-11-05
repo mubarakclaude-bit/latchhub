@@ -44,7 +44,7 @@ const LHsync={
     const fields=fd=>{fd.append('client',b.id);fd.append('client_name',b.name);fd.append('kind',kind);fd.append('folder',folder)};
     /* network hiccups and server errors are retried; refusals (4xx) are final */
     const post=async fd=>{let last={};for(let t=0;t<3;t++){try{const r=await fetch('api/upload.php',{method:'POST',credentials:'same-origin',headers:{'X-LH-CSRF':this.csrf},body:fd});let j={};try{j=await r.json()}catch{}last={r,j};if(r.status<500)return last}catch(e){last={err:e}}await new Promise(x=>setTimeout(x,900*(t+1)))}return last};
-    const fail=res=>{const r=res.r,j=res.j||{};throw new Error('could not upload '+what+' to Zoho: '+(res.err?'the connection to the server failed ('+res.err.message+')':(j.error||j.warning||('server answered '+r.status+(r.status===413?' – the file is bigger than the server allows':''))))+(j.detail?' – Zoho said: '+j.detail:''))};
+    const fail=res=>{const r=res.r,j=res.j||{};try{LHtrack('client_error',null,'Upload of '+what+' failed: '+(res.err?res.err.message:(j.error||j.warning||('HTTP '+r.status))))}catch{}throw new Error('could not upload '+what+' to Zoho: '+(res.err?'the connection to the server failed ('+res.err.message+')':(j.error||j.warning||('server answered '+r.status+(r.status===413?' – the file is bigger than the server allows':''))))+(j.detail?' – Zoho said: '+j.detail:''))};
     let res;
     if(blob.size>12*1048576){                       /* big files go up in pieces, so no single request is too large for the host or its CDN */
       const id=[...crypto.getRandomValues(new Uint8Array(12))].map(x=>x.toString(16).padStart(2,'0')).join(''),CH=6*1048576,n=Math.ceil(blob.size/CH);
@@ -136,3 +136,5 @@ const LHsync={
       if(changed)this.afterChange();
     }catch{}}
 };
+/* Activity log: tell the server about things only the browser sees. Best effort – never blocks or breaks the screen. */
+window.LHtrack=function(action,brand,details){try{if(!window.LHsync||!LHsync.on)return;let b=brand;if(!b&&typeof S!=='undefined'&&typeof ui!=='undefined')b=S.brands.find(x=>x.id===ui.brandId);fetch('api/activity.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-LH-CSRF':LHsync.csrf},body:JSON.stringify({action,client_id:b?b.id:'',client_name:b?b.name:'',details:String(details||'').slice(0,600)})}).catch(()=>{})}catch{}};

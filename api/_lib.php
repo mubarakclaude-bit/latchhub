@@ -39,7 +39,7 @@ function pdo_connect(): PDO {
   return new PDO($d['dsn'] ?? ('mysql:host=' . $d['host'] . ';dbname=' . $d['name'] . ';charset=utf8mb4'), $d['user'] ?? null, $d['pass'] ?? null,
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
 }
-const LH_SCHEMA = 6;   /* bump when a table is added: installs created earlier are upgraded automatically on the next request */
+const LH_SCHEMA = 7;   /* bump when a table is added: installs created earlier are upgraded automatically on the next request */
 function ensure_schema_once(PDO $x): void {
   try { $r = $x->query("SELECT v FROM lh_kv WHERE k='schema'")->fetch(); if ($r && (int)$r['v'] >= LH_SCHEMA) return; } catch (Throwable $e) { /* lh_kv itself may be missing */ }
   ensure_schema($x);
@@ -68,6 +68,7 @@ function ensure_schema(?PDO $x = null): void {
   $x->exec("CREATE TABLE IF NOT EXISTS lh_folders (client_key VARCHAR(40) PRIMARY KEY, zoho_id VARCHAR(80) NOT NULL, name VARCHAR(120) NOT NULL)$tail");
   $x->exec("CREATE TABLE IF NOT EXISTS lh_brands (id VARCHAR(40) PRIMARY KEY, name VARCHAR(190) NOT NULL, json LONGTEXT NOT NULL, version INT NOT NULL DEFAULT 1, updated_by INT NOT NULL DEFAULT 0, updated_at DATETIME NOT NULL)$tail");
   $x->exec("CREATE TABLE IF NOT EXISTS lh_deleted (id VARCHAR(40) PRIMARY KEY, name VARCHAR(190) NOT NULL, json LONGTEXT NOT NULL, folder_id VARCHAR(80) NOT NULL DEFAULT '', files LONGTEXT NOT NULL, deleted_by INT NOT NULL DEFAULT 0, deleted_at DATETIME NOT NULL)$tail");
+  $x->exec("CREATE TABLE IF NOT EXISTS lh_activity (id $pk, at DATETIME NOT NULL, user_id INT NOT NULL DEFAULT 0, user_name VARCHAR(120) NOT NULL DEFAULT '', role VARCHAR(12) NOT NULL DEFAULT '', action VARCHAR(40) NOT NULL, client_id VARCHAR(40) NOT NULL DEFAULT '', client_name VARCHAR(190) NOT NULL DEFAULT '', details TEXT NOT NULL, ip VARCHAR(64) NOT NULL DEFAULT ''" . $ix('at') . $ix('user_id') . $ix('client_id') . $ix('action') . ")$tail");
   $x->exec("CREATE TABLE IF NOT EXISTS lh_pending (id $pk, zoho_id VARCHAR(80) NOT NULL, kind VARCHAR(12) NOT NULL, reason VARCHAR(255) NOT NULL, tries INT NOT NULL DEFAULT 0, created_at DATETIME NOT NULL)$tail");
   $x->exec("CREATE TABLE IF NOT EXISTS lh_files (id $pk, zoho_id VARCHAR(80) NOT NULL, client_key VARCHAR(40) NOT NULL, name VARCHAR(255) NOT NULL, bytes BIGINT NOT NULL, orig_bytes BIGINT NOT NULL, method VARCHAR(40) NOT NULL, user_id INT NOT NULL, created_at DATETIME NOT NULL" . $ix('client_key') . ")$tail");
 }
@@ -387,4 +388,35 @@ function rrmdir(string $d): void {
 }
 function chunk_cleanup_old(string $base): void {   /* abandoned uploads older than a day */
   foreach (glob($base . '/*', GLOB_ONLYDIR) ?: [] as $d) { if (filemtime($d) < time() - 86400) rrmdir($d); }
+}
+
+/* ---------- activity log: who did what, to which client, when, from where (shown to the admin) ---------- */
+function client_ip(): string { return substr((string)($_SERVER['REMOTE_ADDR'] ?? ''), 0, 64); }
+/* never lets a logging problem break the real request */
+function log_activity(string $action, ?array $user = null, array $o = []): void {
+  try {
+    if ($user === null) $user = current_user();
+    db()->prepare('INSERT INTO lh_activity (at,user_id,user_name,role,action,client_id,client_name,details,ip) VALUES (?,?,?,?,?,?,?,?,?)')->execute([
+      gmdate('Y-m-d H:i:s'), (int)($user['id'] ?? 0), substr((string)($user['name'] ?? ($o['who'] ?? '')), 0, 120), substr((string)($user['role'] ?? ''), 0, 12), substr($action, 0, 40),
+      substr((string)($o['client_id'] ?? ''), 0, 40), substr((string)($o['client_name'] ?? ''), 0, 190), substr((string)($o['details'] ?? ''), 0, 1500), client_ip()]);
+    if (mt_rand(1, 300) === 1) db()->prepare('DELETE FROM lh_activity WHERE at < ?')->execute([gmdate('Y-m-d H:i:s', time() - 400 * 86400)]);   /* keep about 13 months */
+  } catch (Throwable $e) { error_log('LatchHub activity: ' . $e->getMessage()); }
+}
+/* what changed between two versions of a client record, in plain words */
+function brand_diff(array $o, array $n): string {
+  $p = [];
+  if ((string)($o['name'] ?? '') !== (string)($n['name'] ?? '')) $p[] = 'renamed "' . ($o['name'] ?? '') . '" → "' . ($n['name'] ?? '') . '"';
+  $label = function ($x) { return is_array($x) ? (string)($x['name'] ?? $x['title'] ?? $x['id'] ?? '?') : '?'; };
+  $byId = function ($arr) { $m = []; foreach (is_array($arr) ? $arr : [] as $x) { if (is_array($x) && isset($x['id'])) $m[(string)$x['id']] = $x; } return $m; };
+  foreach (['logos' => 'logo', 'elements' => 'element', 'fonts' => 'font', 'colors' => 'colour', 'links' => 'link'] as $k => $w) {
+    $a = $byId($o[$k] ?? []); $b = $byId($n[$k] ?? []);
+    $add = array_diff_key($b, $a); $rem = array_diff_key($a, $b);
+    if ($add) $p[] = '+' . count($add) . ' ' . $w . (count($add) > 1 ? 's' : '') . ' (' . implode(', ', array_slice(array_map($label, $add), 0, 3)) . (count($add) > 3 ? ', …' : '') . ')';
+    if ($rem) $p[] = '−' . count($rem) . ' ' . $w . (count($rem) > 1 ? 's' : '') . ' (' . implode(', ', array_slice(array_map($label, $rem), 0, 3)) . (count($rem) > 3 ? ', …' : '') . ')';
+    if ($k === 'colors') foreach (array_intersect_key($b, $a) as $id => $c) { if (strtolower((string)($c['hex'] ?? '')) !== strtolower((string)($a[$id]['hex'] ?? ''))) $p[] = 'colour "' . $label($c) . '" ' . ($a[$id]['hex'] ?? '?') . ' → ' . ($c['hex'] ?? '?'); }
+  }
+  $ob = $o['book']['url'] ?? ($o['book'] ? 'x' : ''); $nb = $n['book']['url'] ?? ($n['book'] ? 'x' : '');
+  if (!$ob && $nb) $p[] = 'brand book added'; elseif ($ob && !$nb) $p[] = 'brand book removed'; elseif ($ob && $nb && $ob !== $nb) $p[] = 'brand book replaced';
+  if (json_encode($o['rules'] ?? null) !== json_encode($n['rules'] ?? null) || (string)($o['notes'] ?? '') !== (string)($n['notes'] ?? '')) $p[] = 'rules / description edited';
+  return implode('; ', $p);
 }

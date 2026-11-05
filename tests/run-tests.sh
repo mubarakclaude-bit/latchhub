@@ -209,6 +209,26 @@ ok "designer cannot delete a brand" 403 "$(curl -s -o /dev/null -w '%{http_code}
 ok "a downloaded file is cached on disk" 1 "$([ -f "$T/lh-cache/$FID" ] && echo 1 || echo 0)"
 kill $P1 2>/dev/null; sleep 1
 curl -s -b "$T/cj2" "$B/api/download.php?id=$FID" -o "$T/dl2.jpg" -w ''; ok "cached file is still served when Zoho is unreachable" "$(echo "$U" | jget stored_bytes)" "$(wc -c < "$T/dl2.jpg" | tr -d ' ')"
+echo "activity log"
+J="$T/cj-act"; curl -s -b "$J" -c "$J" -X POST -H 'Content-Type: application/json' -d '{"email":"boss@x.com","password":"correct-horse-1"}' "$B/api/login.php" >/dev/null
+AL(){ curl -s -b "$J" "$B/api/activity.php?$1"; }
+cnt(){ python3 -c "import sys,json;print(len(json.load(sys.stdin)['events']))"; }
+ok "sign-ins are logged" 1 "$([ "$(AL 'action=login' | cnt)" -ge 1 ] && echo 1 || echo 0)"
+ok "a failed sign-in is logged" 1 "$([ "$(AL 'action=login_failed' | cnt)" -ge 1 ] && echo 1 || echo 0)"
+ok "no password ever appears in the log" 0 "$(AL 'limit=200' | grep -c 'correct-horse\|nope')"
+ok "a client being saved is logged" 1 "$([ "$(AL 'action=client_updated' | cnt)" -ge 1 ] && echo 1 || echo 0)"
+ok "an upload is logged" 1 "$([ "$(AL 'action=file_uploaded' | cnt)" -ge 1 ] && echo 1 || echo 0)"
+ok "a deleted client is logged" 1 "$([ "$(AL 'action=client_deleted' | cnt)" -ge 1 ] && echo 1 || echo 0)"
+ok "filter by client name works" 1 "$([ "$(AL 'client=Solid' | cnt)" -ge 1 ] && echo 1 || echo 0)"
+ok "filter that matches nothing is empty" 0 "$(AL 'client=NoSuchClientZZZ' | cnt)"
+ok "the summary lists people" 1 "$(AL 'summary=1' | python3 -c "import sys,json;print(1 if json.load(sys.stdin)['summary'] else 0)")"
+ok "CSV download works" 1 "$(curl -s -b "$J" "$B/api/activity.php?format=csv" | head -1 | grep -c 'Time (UTC)')"
+ok "designer cannot read the activity log" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" "$B/api/activity.php")"
+ok "designer can report a browser event" 200 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" -H "X-LH-CSRF: $CS2" -X POST -H 'Content-Type: application/json' -d '{"action":"svg_download","client_id":"solid01","client_name":"=HYPERLINK(1)","details":"logo.svg"}' "$B/api/activity.php")"
+ok "unknown browser events are refused" 400 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" -H "X-LH-CSRF: $CS2" -X POST -H 'Content-Type: application/json' -d '{"action":"login"}' "$B/api/activity.php")"
+ok "browser event without CSRF -> 403" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" -X POST -H 'Content-Type: application/json' -d '{"action":"svg_download"}' "$B/api/activity.php")"
+ok "the designer's event shows under the designer's name" 1 "$([ "$(AL 'action=svg_download' | cnt)" -ge 1 ] && echo 1 || echo 0)"
+ok "spreadsheet formulas are neutralised in CSV" 0 "$(curl -s -b "$J" "$B/api/activity.php?format=csv" | grep -c '^[^,]*,[^,]*,[^,]*,[^,]*,=HYPERLINK\|,"=HYPERLINK')"
 echo "before the database is configured"
 T2=$(mktemp -d); mkdir -p "$T2/public_html"; cp "$ROOT/index.php" "$T2/public_html/"; cp -R "$ROOT/api" "$T2/public_html/api"; printf '<!doctype html><body>APP-MARKER</body>' > "$T2/public_html/index.html"; cp "$ROOT/serve.php" "$T2/public_html/"; mkdir -p "$T2/public_html/assets/kaynes"; echo "<svg/>" > "$T2/public_html/assets/kaynes/logo.svg"
 $PHP -S 127.0.0.1:8903 -t "$T2/public_html" >/dev/null 2>&1 & P3=$!; sleep 1

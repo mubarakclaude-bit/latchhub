@@ -25,14 +25,17 @@ if ($act === 'create') {
   if ($role === 'designer' && (int)$c->fetch()['c'] >= 5) out(400, ['error' => 'The team is set to one admin plus four designers. Switch someone off first.']);
   try { $x->prepare('INSERT INTO lh_users (email,name,role,pass_hash,active,created_at) VALUES (?,?,?,?,1,?)')->execute([$email, $name, $role, password_hash((string)$b['password'], PASSWORD_DEFAULT), now()]); }
   catch (Throwable $e) { out(409, ['error' => 'That email already has an account.']); }
+  log_activity('user_created', $me, ['details' => $name . ' <' . $email . '> as ' . $role]);
   out(200, ['ok' => true]);
 }
 $id = (int)($b['id'] ?? 0);
 if ($id < 1) out(400, ['error' => 'Missing user id.']);
-if ($act === 'password') { $checkPw((string)($b['password'] ?? '')); $x->prepare('UPDATE lh_users SET pass_hash=? WHERE id=?')->execute([password_hash((string)$b['password'], PASSWORD_DEFAULT), $id]); out(200, ['ok' => true]); }
+$tu = $x->prepare('SELECT name,email FROM lh_users WHERE id=?'); $tu->execute([$id]); $target = $tu->fetch() ?: ['name' => '?', 'email' => '?'];
+if ($act === 'password') { $checkPw((string)($b['password'] ?? '')); $x->prepare('UPDATE lh_users SET pass_hash=? WHERE id=?')->execute([password_hash((string)$b['password'], PASSWORD_DEFAULT), $id]); log_activity('password_reset', $me, ['details' => 'for ' . $target['name'] . ' <' . $target['email'] . '>']); out(200, ['ok' => true]); }
 if ($act === 'active') {
   if ($id === (int)$me['id']) out(400, ['error' => 'You cannot switch yourself off.']);
   $x->prepare('UPDATE lh_users SET active=? WHERE id=?')->execute([!empty($b['active']) ? 1 : 0, $id]);
+  log_activity(!empty($b['active']) ? 'user_switched_on' : 'user_switched_off', $me, ['details' => $target['name'] . ' <' . $target['email'] . '>']);
   out(200, ['ok' => true]);
 }
 out(400, ['error' => 'Unknown action.']);

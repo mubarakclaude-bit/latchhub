@@ -4,6 +4,7 @@ require __DIR__ . '/_lib.php';
 require_method('POST');
 start_session();
 check_csrf();
+log_activity('logout');
 $_SESSION = [];
 session_destroy();
 out(200, ['ok' => true]);

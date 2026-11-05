@@ -85,4 +85,5 @@ $id = pick_id($j) ?? '';
 if ($id === '') $id = zoho_find_id($folder, $sendName);
 db()->prepare('INSERT INTO lh_files (zoho_id,client_key,name,bytes,orig_bytes,method,user_id,created_at) VALUES (?,?,?,?,?,?,?,?)')->execute([$id, $key, $sendName, $bytes, (int)$f['size'], substr($method, 0, 40), (int)$user['id'], now()]);
 if ($id === '') error_log('LatchHub upload: no file id in Zoho reply: ' . substr($raw, 0, 300));
+log_activity('file_uploaded', $user, ['client_id' => $key, 'client_name' => (string)($_POST['client_name'] ?? ''), 'details' => $sendName . ' · ' . round($bytes / 1048576, 2) . ' MB' . ($f['size'] != $bytes ? ' (was ' . round($f['size'] / 1048576, 2) . ' MB, ' . $method . ')' : '') . ' · ' . ($subPath !== '' ? $subPath : 'client folder') . ($id === '' ? ' · NO FILE ID FROM ZOHO' : '')]);
 out(200, ($id === '' ? ['warning' => 'Zoho accepted the upload but did not return a file id. Check the client folder in WorkDrive.'] : []) + ['ok' => true, 'id' => $id, 'name' => $sendName, 'original_bytes' => (int)$f['size'], 'stored_bytes' => $bytes, 'compression' => $method, 'saved_percent' => $f['size'] > 0 ? (int)round((1 - $bytes / $f['size']) * 100) : 0]);

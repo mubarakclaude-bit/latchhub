@@ -33,7 +33,9 @@ $b = body_json();
 $act = (string)($b['action'] ?? '');
 if ($act === 'retry_pending') {
   require_admin(true);
-  out(200, ['ok' => true] + process_pending(25, true));
+  $rp = process_pending(25, true);
+  log_activity('cleanup_retry', null, ['details' => $rp['done'] . ' moved to the Zoho trash, ' . $rp['failed'] . ' still refused']);
+  out(200, ['ok' => true] + $rp);
 }
 if ($act === 'restore') {
   require_admin(true);
@@ -53,6 +55,7 @@ if ($act === 'restore') {
   try { $x->prepare('INSERT INTO lh_brands (id,name,json,version,updated_by,updated_at) VALUES (?,?,?,1,?,?)')->execute([$id, $d['name'], $d['json'], (int)$user['id'], now()]); }
   catch (PDOException $e) { out(409, ['error' => 'A client with that id already exists.']); }
   $x->prepare('DELETE FROM lh_deleted WHERE id=?')->execute([$id]);
+  log_activity('client_restored', $user, ['client_id' => $id, 'client_name' => $d['name'], 'details' => 'Client and its Zoho folder restored']);
   out(200, ['ok' => true]);
 }
 if ($act === 'delete') {
@@ -85,6 +88,7 @@ if ($act === 'delete') {
     }
   }
   process_pending();
+  log_activity('client_deleted', $user, ['client_id' => $id, 'client_name' => $row ? (string)(json_decode($row['json'], true)['name'] ?? $id) : $id, 'details' => !empty($res['trashed_folder']) ? 'Zoho folder moved to the WorkDrive trash' : ($f ? 'Zoho folder NOT trashed yet – ' . ($res['warning'] ?? '') : 'no Zoho folder existed')]);
   out(200, $res);
 }
 if ($act !== 'save') out(400, ['error' => 'Unknown action.']);
@@ -98,7 +102,7 @@ $id = (string)$brand['id'];
 $base = (int)($b['base_version'] ?? 0);
 $name = substr(trim((string)$brand['name']), 0, 190);
 if ($base === 0) {
-  try { $x->prepare('INSERT INTO lh_brands (id,name,json,version,updated_by,updated_at) VALUES (?,?,?,1,?,?)')->execute([$id, $name, $json, (int)$user['id'], now()]); out(200, ['ok' => true, 'version' => 1]); }
+  try { $x->prepare('INSERT INTO lh_brands (id,name,json,version,updated_by,updated_at) VALUES (?,?,?,1,?,?)')->execute([$id, $name, $json, (int)$user['id'], now()]); log_activity('client_created', $user, ['client_id' => $id, 'client_name' => $name, 'details' => count($brand['logos'] ?? []) . ' logos, ' . count($brand['colors'] ?? []) . ' colours, ' . count($brand['fonts'] ?? []) . ' fonts' . (!empty($brand['book']) ? ', brand book' : '')]); out(200, ['ok' => true, 'version' => 1]); }
   catch (PDOException $e) { /* already exists: someone created it first */ }
 } else {
   $o = $x->prepare('SELECT json FROM lh_brands WHERE id=? AND version=?');
@@ -127,6 +131,8 @@ if ($base === 0) {
       }
     }
     process_pending();
+    $diff = $before ? brand_diff(json_decode($before['json'], true) ?: [], $brand) : '';
+    if ($diff !== '' || $trashed) log_activity('client_updated', $user, ['client_id' => $id, 'client_name' => $name, 'details' => ($diff !== '' ? $diff : 'saved') . ($trashed ? ' · ' . $trashed . ' file' . ($trashed > 1 ? 's' : '') . ' moved to the Zoho trash' : '') . (!empty($res['renamed']) ? ' · Zoho folder renamed' : '') . (!empty($res['warning']) ? ' · WARNING: ' . $res['warning'] : '')]);
     out(200, $res);
   }
 }

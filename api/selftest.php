@@ -3,10 +3,10 @@ declare(strict_types=1);
 /* Admin only (POST): really creates a folder in Zoho, uploads a tiny file, reads it back and compares – showing which step fails and what Zoho answered. */
 require __DIR__ . '/_lib.php';
 require_method('POST');
-require_admin(true);
+$adminUser = require_admin(true);
 $steps = [];
 $step = function (string $n, bool $ok, string $note = '') use (&$steps) { $steps[] = ['step' => $n, 'ok' => $ok, 'note' => $note]; return $ok; };
-$done = function () use (&$steps) { out(200, ['all_ok' => !in_array(false, array_column($steps, 'ok'), true), 'steps' => $steps]); };
+$done = function () use (&$steps, &$adminUser) { $ok = !in_array(false, array_column($steps, 'ok'), true); log_activity('selftest', $adminUser, ['details' => $ok ? 'all steps passed' : 'FAILED: ' . implode('; ', array_map(fn($s) => $s['step'], array_filter($steps, fn($s) => !$s['ok'])))]); out(200, ['all_ok' => $ok, 'steps' => $steps]); };
 $root = cfg()['zoho']['root_folder_id'];
 try { $folder = ensure_path($root, '_LatchHub self-test', true); } catch (Throwable $e) { $folder = null; }
 if (!$step('Create (or find) the folder "_LatchHub self-test" inside LatchHub', (bool)$folder, $folder ? 'folder id ' . $folder : 'Zoho refused to create it – see the server error log, or check that the Zoho user may create folders here.')) $done();
