@@ -65,9 +65,11 @@ $daily[$localDay($now)] = $daily[$localDay($now)] ?? $zero;
 $heat = array_fill(0, 7, array_fill(0, 24, 0));
 $people = [];
 $assets = []; $actions = [];
-$st = $x->prepare('SELECT at,user_id,action,client_id,client_name,details FROM lh_activity WHERE at >= ? ORDER BY id DESC LIMIT 60000');
+/* rows are read one at a time (not all into memory) so a year of activity stays light on shared hosting */
+@set_time_limit(60);
+$st = $x->prepare('SELECT at,user_id,action,client_id,client_name,SUBSTR(details,1,120) AS details FROM lh_activity WHERE at >= ? ORDER BY id DESC LIMIT 200000');
 $st->execute([gmdate('Y-m-d H:i:s', $from)]);
-foreach ($st->fetchAll() as $r) {
+while ($r = $st->fetch()) {
   $ts = strtotime($r['at'] . ' UTC'); if ($ts === false) continue;
   $c = act_cat((string)$r['action']);
   $totals[$c]++;

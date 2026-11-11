@@ -132,7 +132,9 @@ if ($base === 0) {
     }
     process_pending();
     /* one activity row per change, so the admin sees each logo, colour, font… that was added, edited or removed */
-    $changes = $before ? brand_changes(json_decode($before['json'], true) ?: [], $brand) : [['client_updated', 'saved']];
+    /* the save is already stored at this point: a problem while describing the change must never turn it into an error */
+    try { $changes = $before ? brand_changes(json_decode($before['json'], true) ?: [], $brand) : [['client_updated', 'saved']]; }
+    catch (Throwable $e) { error_log('LatchHub changes: ' . $e->getMessage()); $changes = [['client_updated', 'saved']]; }
     foreach (array_slice($changes, 0, 120) as [$act, $det]) {
       if ($act === 'client_renamed') $det .= (!empty($res['renamed']) ? ' · Zoho folder renamed' : '') . (!empty($res['warning']) ? ' · WARNING: ' . $res['warning'] : '');
       log_activity($act, $user, ['client_id' => $id, 'client_name' => $name, 'details' => $det]);
