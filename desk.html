@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>My desk · LatchHub</title>
+<link rel="icon" type="image/svg+xml" href="assets/latchhub/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Caveat:wght@500;600&display=swap">
+<style>
+/* The designer's desk (preview). A dark desk, today's hours across it, paper notes pinned at the time they are planned.
+   Tasks are mock data kept per person on the server; clients, names and the activity log are real. */
+:root{color-scheme:dark;
+  --desk:#13151c;--desk2:#191c25;--felt:#1f2330;--line:rgba(255,255,255,.07);--line2:rgba(255,255,255,.14);
+  --fg:#f2f3f7;--fg2:#b9bdcc;--mute:#7f8599;--inv:#13151c;
+  --sun:#ffd166;--coral:#ff7b6b;--mint:#4fe3c1;--sky:#5cc8ff;--lilac:#c3a6ff;--lime:#c9f26a;--peach:#ffb48a;--rose:#ff9ecb;
+  --late:#ff5c5c;--pin:#ff4b6e;--paper-ink:#1a1a22;--paper-mute:rgba(20,20,30,.62);
+  --disp:"Outfit","Inter",system-ui,sans-serif;--ui:"Inter",system-ui,sans-serif;--hand:"Caveat","Segoe Print","Bradley Hand",cursive;
+  --sh:0 18px 40px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.3)}
+*{box-sizing:border-box;margin:0}
+html,body{min-height:100%}
+body{background:var(--desk);color:var(--fg);font:14px/1.5 var(--ui);-webkit-font-smoothing:antialiased;padding:0 clamp(16px,2.4vw,36px) 50px;overflow-x:hidden;background-image:radial-gradient(rgba(255,255,255,.045) 1px,transparent 1px);background-size:22px 22px}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+:focus-visible{outline:2px solid var(--sun);outline-offset:3px;border-radius:8px}
+a{color:inherit}
+.disp{font-family:var(--disp)}.hand{font-family:var(--hand);font-weight:600}
+.cap{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:600}
+.mute{color:var(--mute)}.num{font-variant-numeric:tabular-nums}
+/* top */
+.bar{display:flex;align-items:center;gap:14px;padding:14px 0 0;font-size:12.5px;color:var(--fg2)}
+.bar .lg{font-family:var(--disp);font-weight:700;font-size:16px;color:var(--fg);display:flex;align-items:center;gap:8px;text-decoration:none}
+.bar .lg i{width:18px;height:18px;border-radius:5px;background:var(--sun);display:block}
+.bar .pv{background:var(--felt);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--sun)}
+.bar .sp{flex:1}
+.bar a.x{text-decoration:none;opacity:.85}.bar a.x:hover{opacity:1;text-decoration:underline}
+.hd{display:grid;grid-template-columns:1fr auto;gap:18px;align-items:end;padding:18px 0 16px}
+.hd h1{font-family:var(--disp);font-weight:600;font-size:clamp(26px,3.2vw,42px);letter-spacing:-.025em;line-height:1.05;text-wrap:balance}
+.hd h1 em{font-style:normal;color:var(--sun)}
+.clock{display:flex;align-items:baseline;gap:10px}
+.clock b{font-family:var(--disp);font-size:clamp(34px,4.4vw,58px);font-weight:600;letter-spacing:-.04em;line-height:1}
+.clock span{color:var(--mute);font-size:13px}
+.meta{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:var(--felt);border:1px solid var(--line);font-size:12.5px;color:var(--fg2);white-space:nowrap}
+.chip i{width:8px;height:8px;border-radius:50%;background:var(--c,var(--mint));display:inline-block}
+.ring{--p:0;width:64px;height:64px;border-radius:50%;background:conic-gradient(var(--mint) calc(var(--p)*1%),var(--felt) 0);display:grid;place-items:center;position:relative}
+.ring:after{content:"";position:absolute;inset:6px;border-radius:50%;background:var(--desk)}
+.ring b{position:relative;z-index:1;font-family:var(--disp);font-size:15px;font-weight:600}
+.right{display:flex;align-items:center;gap:14px}
+.demo{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--mute);background:var(--felt);border:1px solid var(--line);border-radius:999px;padding:4px 10px 4px 12px}
+.demo input{width:110px;accent-color:var(--sun)}
+@media(max-width:820px){.hd{grid-template-columns:1fr}.right{justify-content:space-between}}
+/* layout */
+.main{display:grid;grid-template-columns:minmax(0,1fr) clamp(320px,26vw,420px);gap:18px;align-items:start}
+.main>section{min-width:0}
+@media(max-width:1000px){.main{grid-template-columns:1fr}}
+.panel{background:var(--felt);border:1px solid var(--line);border-radius:26px;padding:18px;position:sticky;top:16px}
+@media(max-width:1000px){.panel{position:static}}
+/* board */
+.board{background:var(--desk2);border:1px solid var(--line);border-radius:26px;padding:18px 18px 14px;position:relative;overflow:hidden}
+.bh{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.bh h2{font-family:var(--disp);font-weight:600;font-size:18px}
+.bh .legend{display:flex;gap:12px;font-size:11.5px;color:var(--mute);flex-wrap:wrap}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block;vertical-align:-1px;margin-right:5px}
+.tl{position:relative;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;padding-bottom:6px;max-width:100%}
+.tlin{position:relative;min-width:1080px;height:470px}
+.hours{position:absolute;inset:0;display:grid;grid-template-columns:repeat(12,1fr);pointer-events:none}
+.hours div{border-left:1px dashed var(--line2);padding:4px 0 0 8px;font-size:11px;color:var(--mute);font-variant-numeric:tabular-nums}
+.hours div.past{background:rgba(0,0,0,.14)}
+.hours div.lunch{background:repeating-linear-gradient(135deg,transparent 0 8px,rgba(255,255,255,.025) 8px 16px)}
+.hours div small{font-size:10px;opacity:.7;display:block}
+.now{position:absolute;top:0;bottom:0;width:2px;background:var(--sun);box-shadow:0 0 12px var(--sun);z-index:5;pointer-events:none;transition:left 1s linear}
+.now:before{content:attr(data-t);position:absolute;top:-2px;left:8px;background:var(--sun);color:#1a1500;font:600 11px var(--disp);padding:2px 7px;border-radius:999px;white-space:nowrap}
+.now:after{content:"";position:absolute;bottom:0;left:-5px;width:12px;height:12px;border-radius:50%;background:var(--sun)}
+.slot{position:absolute;top:34px;bottom:0;border-radius:14px;background:rgba(255,209,102,.1);border:1.5px dashed var(--sun);display:none;z-index:1}
+.slot.on{display:block}
+.note{position:absolute;width:232px;background:var(--pc);color:var(--paper-ink);border-radius:16px;padding:14px 14px 12px;box-shadow:var(--sh);cursor:grab;user-select:none;transform:rotate(var(--rot,0deg));transition:transform .25s cubic-bezier(.2,.7,.2,1),box-shadow .25s,opacity .3s;z-index:3;display:flex;flex-direction:column;gap:8px;touch-action:none}
+.note:hover{transform:rotate(0deg) translateY(-3px) scale(1.01);z-index:6;box-shadow:0 26px 50px rgba(0,0,0,.5)}
+.note.drag{opacity:.75;cursor:grabbing;transform:rotate(0) scale(1.03);z-index:9}
+.note.focus{outline:3px solid #fff;outline-offset:3px;z-index:7;transform:rotate(0)}
+.note.dim{opacity:.45}
+.note .pin{position:absolute;top:-9px;left:50%;width:18px;height:18px;margin-left:-9px;border-radius:50%;background:var(--pin);box-shadow:0 3px 6px rgba(0,0,0,.35),inset 0 -3px 0 rgba(0,0,0,.2)}
+.note .pin.ok{background:var(--mint)}.note .pin.wait{background:#9aa0b4}
+.note .k{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:var(--paper-mute);font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.note .k .fmt{font-family:var(--hand);text-transform:none;letter-spacing:0;font-size:15px;font-weight:600}
+.note h3{font-family:var(--disp);font-weight:600;font-size:17px;line-height:1.2;letter-spacing:-.01em}
+.note .when{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--paper-mute)}
+.note .when b{color:var(--paper-ink);font-weight:600}
+.fuse{height:6px;border-radius:999px;background:rgba(20,20,30,.16);overflow:hidden}
+.fuse i{display:block;height:100%;background:var(--paper-ink);border-radius:999px;transition:width 1s linear}
+.fuse.hot i{background:var(--late)}
+.note .ft{display:flex;gap:6px;align-items:center;margin-top:2px}
+.nb{padding:6px 10px;border-radius:999px;font-size:11.5px;font-weight:600;background:rgba(20,20,30,.1);color:var(--paper-ink)}
+.nb.pri{background:var(--paper-ink);color:#fff}
+.nb.ic{width:30px;padding:6px 0;text-align:center;margin-left:auto}
+.note.waiting{filter:saturate(.35) brightness(.92)}
+.note.waiting .wtag{font-family:var(--hand);font-size:16px;color:#2a2a35;background:rgba(255,255,255,.55);padding:2px 10px;border-radius:999px;align-self:flex-start;transform:rotate(-2deg)}
+.note .done-stamp{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}
+.note .done-stamp span{font-family:var(--hand);font-size:34px;color:#0d6b53;border:3px solid #0d6b53;border-radius:12px;padding:2px 16px;transform:rotate(-12deg);background:rgba(255,255,255,.35)}
+.note .usual{font-size:11px;color:var(--paper-mute)}
+.note .chk{display:flex;gap:4px}
+.note .chk i{flex:1;height:4px;border-radius:999px;background:rgba(20,20,30,.16)}
+.note .chk i.on{background:#0d6b53}
+/* rails */
+.rails{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px;margin-top:14px}
+.rail{background:var(--felt);border:1px solid var(--line);border-radius:22px;padding:14px 16px;min-height:110px}
+.rail h4{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--disp);font-size:14px;font-weight:600;margin-bottom:10px;gap:8px}
+.rail h4 span{font-size:11.5px;color:var(--mute);font-weight:500;text-align:right}
+.rail p.e{color:var(--mute);font-size:12.5px}
+.srow{display:flex;gap:10px;align-items:center;padding:9px 10px;border-radius:14px;background:var(--pc);color:var(--paper-ink);margin-bottom:8px;cursor:pointer;transition:transform .15s}
+.srow:hover{transform:translateX(3px)}
+.srow .d{width:10px;height:10px;border-radius:50%;background:var(--pin);flex:none}
+.srow b{font-weight:600;font-size:13px;flex:1;min-width:40%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow small{font-size:11.5px;color:var(--paper-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
+.srow.g{background:var(--desk2);color:var(--fg)}.srow.g small{color:var(--mute)}
+/* panel */
+.panel h2{font-family:var(--disp);font-weight:600;font-size:20px;line-height:1.15;letter-spacing:-.015em}
+.panel .sub{color:var(--mute);font-size:12.5px;margin-top:4px}
+.focusring{--p:0;width:150px;height:150px;border-radius:50%;background:conic-gradient(var(--sun) calc(var(--p)*1%),var(--desk2) 0);display:grid;place-items:center;position:relative;margin:14px auto 6px}
+.focusring:after{content:"";position:absolute;inset:10px;border-radius:50%;background:var(--felt)}
+.focusring div{position:relative;z-index:1;text-align:center}
+.focusring b{display:block;font-family:var(--disp);font-size:30px;font-weight:600;letter-spacing:-.03em;line-height:1}
+.focusring small{font-size:11px;color:var(--mute)}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 15px;border-radius:999px;font-weight:600;font-size:13px;background:var(--desk2);border:1px solid var(--line2);color:var(--fg);transition:transform .15s,background .2s}
+.btn:hover{background:var(--line2)}.btn:active{transform:scale(.97)}
+.btn.sun{background:var(--sun);color:#1a1500;border-color:transparent}
+.btn.mint{background:var(--mint);color:#06281f;border-color:transparent}
+.btn.ghost{background:transparent}.btn.sm{padding:7px 12px;font-size:12px}
+.btn[disabled]{opacity:.45;cursor:default}
+.plist{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.pl{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:var(--desk2);border:1px solid var(--line)}
+.pl .ck{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line2);display:grid;place-items:center;font-size:12px;flex:none;transition:all .25s}
+.pl.on .ck{background:var(--mint);border-color:var(--mint);color:#06281f}
+.pl b{font-weight:600;font-size:13px}.pl small{display:block;color:var(--mute);font-size:11.5px}
+.drop{margin-top:12px;border:1.5px dashed var(--line2);border-radius:18px;padding:16px;text-align:center;color:var(--mute);font-size:12.5px;transition:all .2s}
+.drop.over{border-color:var(--sun);color:var(--fg);background:rgba(255,209,102,.08)}
+.drop label{color:var(--sun);text-decoration:underline;cursor:pointer;text-underline-offset:3px}
+.tip{margin-top:14px;padding:12px 14px;border-radius:16px;background:var(--desk2);border:1px solid var(--line);font-size:12.5px;color:var(--fg2);display:flex;gap:10px}
+.tip .hand{color:var(--sun);font-size:18px;line-height:1;flex:none}
+.wait{margin-top:12px;border-top:1px solid var(--line);padding-top:12px}
+.wait select{width:100%;background:var(--desk2);border:1px solid var(--line2);border-radius:12px;padding:9px 11px;color:var(--fg);margin-top:8px}
+.sticker{position:absolute;right:16px;top:16px;font-family:var(--hand);font-size:17px;color:var(--sun);transform:rotate(4deg)}
+.streak{display:flex;gap:4px;align-items:center}.streak i{width:10px;height:14px;border-radius:3px;background:var(--mint);display:inline-block}.streak i.off{background:var(--line2)}
+.toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,14px);opacity:0;background:var(--fg);color:var(--inv);padding:11px 16px;border-radius:999px;font-size:13px;font-weight:500;z-index:120;transition:all .22s;max-width:calc(100% - 32px);pointer-events:none;box-shadow:var(--sh)}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.wrapup{background:var(--sun);color:#1a1500;border-radius:22px;padding:16px 18px;margin-top:14px;display:none;gap:4px}
+.wrapup.on{display:grid}.wrapup b{font-family:var(--disp);font-size:20px}
+.gate{min-height:70vh;display:grid;place-items:center;text-align:center;color:var(--fg2)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style></head><body>
+<div class="bar"><a class="lg" href="./"><i></i>LatchHub</a><span class="pv">My desk · preview</span><span class="sp"></span><a class="x" href="./">← Brand hub</a><button class="x" id="reset" style="opacity:.6;text-decoration:underline">Reset sample desk</button></div>
+<header class="hd" id="hd" hidden>
+  <div><div class="clock"><b id="clk" class="num">—</b><span id="dateline"></span></div><h1 id="line" style="margin-top:8px"></h1><div class="meta" id="meta"></div></div>
+  <div class="right"><div class="ring" id="ring" title="Today"><b id="ringt">0/0</b></div><label class="demo" title="Preview only: shifts the clock so you can see the desk later in the day. Actions still use the real time.">Preview clock <input type="range" id="tt" min="0" max="720" step="5" value="0"></label></div>
+</header>
+<div class="main" id="main" hidden>
+  <section>
+    <div class="board"><div class="bh"><h2 id="bt">Today on the desk</h2><div class="legend" id="legend"></div></div>
+      <div class="tl" id="tl"><div class="tlin" id="tlin"><div class="hours" id="hours"></div><div class="slot" id="slot"></div><div class="now" id="nowline" data-t=""></div></div></div></div>
+    <div class="rails">
+      <div class="rail"><h4>Not pinned yet <span>click to pin to the next gap</span></h4><div id="tray"></div></div>
+      <div class="rail"><h4>Waiting on the manager <span>clock paused · nudged</span></h4><div id="waitrail"></div></div>
+      <div class="rail"><h4>Coming up <span>this week</span></h4><div id="soon"></div></div>
+      <div class="rail"><h4>Done today <span id="donen"></span></h4><div id="donerail"></div></div>
+    </div>
+  </section>
+  <aside class="panel" id="panel"></aside>
+</div>
+<div class="gate" id="gate"><div><p class="cap">My desk</p><h1 class="disp" style="font-size:28px;margin:8px 0">Loading your desk…</h1><p id="gatemsg"></p></div></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const toast=(m,ms=2800)=>{const e=$('#toast');e.textContent=m;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),ms)};
+const PAL=['var(--sun)','var(--coral)','var(--sky)','var(--lilac)','var(--mint)','var(--peach)','var(--lime)','var(--rose)'];
+const H0=8,H1=20,SPAN=(H1-H0)*60,TZ=-new Date().getTimezoneOffset();
+const st={me:null,csrf:'',tasks:[],clients:[],focus:null,shift:0,skew:0,streak:[1,1,1,0,1]};
+/* times: the server stores unix seconds; the desk thinks in minutes of the local day */
+const mid=()=>{const d=new Date();d.setHours(0,0,0,0);return d.getTime()/1000};
+const nowMin=()=>((Date.now()/1000+st.skew)-mid())/60+st.shift;
+const toMin=ts=>ts==null?null:(ts-mid())/60;
+const dayOf=ts=>Math.floor((ts-mid())/86400);
+const hm=m=>{m=((m%1440)+1440)%1440;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(Math.floor(m%60)).padStart(2,'0')};
+const dur=m=>m<60?Math.max(0,Math.round(m))+' min':(m/60).toFixed(m%60?1:0).replace('.0','')+' h';
+const spentOf=t=>t.spent+(t.runningSince?Math.max(0,(Date.now()/1000+st.skew-t.runningSince)/60):0);
+const cCol=id=>PAL[Math.max(0,st.clients.findIndex(c=>c.id===id))%PAL.length];
+const left=t=>{const now=nowMin(),d=dayOf(t.due),m=toMin(t.due)-now;if(d>0)return{t:['','tomorrow','in 2 days','in 3 days','in 4 days','in 5 days','in 6 days'][d]||'in '+d+' days',k:'calm'};if(m<0)return{t:dur(-m)+' over',k:'late'};if(m<=90)return{t:dur(m)+' left',k:'hot'};if(m<=240)return{t:dur(m)+' left',k:'warm'};return{t:'due '+hm(toMin(t.due)),k:'calm'}};
+const xOf=m=>Math.max(0,Math.min(1,(m-H0*60)/SPAN))*100;
+const today=()=>st.tasks.filter(t=>dayOf(t.due)<=0);
+
+async function api(path,body){const o={credentials:'same-origin',headers:{}};if(body){o.method='POST';o.headers['Content-Type']='application/json';o.headers['X-LH-CSRF']=st.csrf;o.body=JSON.stringify(Object.assign({tz:TZ},body))}const r=await fetch('api/'+path,o);let j={};try{j=await r.json()}catch{}if(!r.ok)throw Object.assign(new Error(j.error||('Error '+r.status)),{status:r.status});return j}
+async function act(action,id,extra){try{const j=await api('desk.php',Object.assign({action,id},extra||{}));st.tasks=j.tasks;st.skew=j.now-Date.now()/1000;renderAll();return true}catch(e){toast(e.message,5000);if(e.status===401)location.href='./';return false}}
+
+/* header */
+function header(){
+  const td=today(),done=td.filter(t=>t.state==='done'),open=td.filter(t=>t.state!=='done'),now=nowMin();
+  $('#clk').textContent=hm(now);$('#dateline').textContent=new Date().toLocaleDateString([],{weekday:'long',day:'numeric',month:'long'});
+  $('#nowline').style.left=xOf(now)+'%';$('#nowline').dataset.t=hm(now);
+  $('#ring').style.setProperty('--p',td.length?done.length/td.length*100:0);$('#ringt').textContent=done.length+'/'+td.length;
+  const h=now/60,greet=h<12?'Good morning':h<17?'Good afternoon':'Good evening',first=esc((st.me.name||'').split(' ')[0]);
+  const nxt=open.filter(t=>t.state!=='waiting').sort((a,b)=>a.due-b.due)[0];
+  let line;if(!open.length)line=`${greet}, ${first}. <em>Desk is clear.</em> Nothing more today.`;else if(open.length===1)line=`${greet}, ${first}. <em>One note left</em>${nxt?' · '+esc(nxt.title):''}.`;else if(done.length)line=`${greet}, ${first}. ${done.length} down, <em>${open.length} to go.</em>`;else line=`${greet}, ${first}. <em>${['','One note','Two notes','Three notes','Four notes'][open.length]||open.length+' notes'}</em> on your desk today.`;
+  $('#line').innerHTML=line;
+  const pinned=open.filter(t=>t.plan!=null&&t.state!=='waiting'),planned=pinned.reduce((a,t)=>a+Math.max(0,t.est-spentOf(t)),0);
+  $('#meta').innerHTML=`<span class="chip"><i style="--c:var(--mint)"></i>${dur(planned)} of work pinned${planned?' · you could be free by <b>&nbsp;'+hm(Math.min(now+planned,1439))+'</b>':''}</span><span class="chip" title="Days delivered on time this week (sample)"><span class="streak">${st.streak.map(x=>`<i class="${x?'':'off'}"></i>`).join('')}</span>&nbsp;4 of 5 days on time</span>${st.tasks.some(t=>t.state==='waiting')?`<span class="chip"><i style="--c:#9aa0b4"></i>${st.tasks.filter(t=>t.state==='waiting').length} waiting on the manager · not your clock</span>`:''}`;
+  $('#bt').textContent=h>=17.5&&open.length?'Last stretch':h>=13&&h<14?'Lunch – the desk can wait':'Today on the desk';
+  $('#legend').innerHTML=st.clients.slice(0,8).map(c=>`<span><i style="background:${cCol(c.id)}"></i>${esc(c.name)}</span>`).join('')+'<span class="mute">· drag a note to the hour you’ll do it</span>';
+}
+function hours(){const el=$('#hours');el.innerHTML='';const now=nowMin();for(let h=H0;h<H1;h++){const d=document.createElement('div');d.innerHTML=`<span>${String(h).padStart(2,'0')}</span>${h===13?'<small>lunch</small>':''}`;if(h===13)d.classList.add('lunch');if(h+1<=now/60)d.classList.add('past');el.appendChild(d)}}
+/* board */
+function board(){
+  const tlin=$('#tlin');$$('.note',tlin).forEach(n=>n.remove());const lanes=[],now=nowMin(),running=st.tasks.find(t=>t.runningSince);
+  st.tasks.filter(t=>dayOf(t.due)<=0&&t.state!=='tray'&&t.state!=='soon'&&t.plan!=null).sort((a,b)=>a.plan-b.plan).forEach((t,idx)=>{
+    const el=document.createElement('article');el.className='note'+(st.focus===t.id?' focus':'')+(t.state==='waiting'?' waiting':'')+(running&&running.id!==t.id&&t.state!=='done'?' dim':'');
+    el.dataset.id=t.id;el.style.setProperty('--pc',cCol(t.client));el.style.setProperty('--rot',((idx%3)-1)*1.2+'deg');
+    const plan=toMin(t.plan),x=xOf(plan),w=Math.max((240/(tlin.clientWidth||1080))*100,(t.est/SPAN)*100);let lane=0;while(lanes[lane]&&lanes[lane]>x-1)lane++;lanes[lane]=x+w;
+    el.style.left=`calc(${x}% + 4px)`;el.style.top=(44+lane*218)+'px';
+    const L=left(t),dueM=toMin(t.due),frac=Math.max(0,Math.min(1,(dueM-now)/Math.max(30,dueM-Math.min(plan,dueM-60)))),sp=spentOf(t),isRun=!!t.runningSince;
+    el.innerHTML=`<span class="pin ${t.state==='done'?'ok':t.state==='waiting'?'wait':''}"></span>
+     <div class="k"><span>${esc(t.clientName)}</span><span class="fmt">${esc(t.fmt)}</span></div><h3>${esc(t.title)}</h3>
+     ${t.state==='waiting'?`<span class="wtag">waiting: ${esc(t.waitWhy)}</span>`:''}
+     <div class="when"><span>${t.state==='done'?'done '+hm(toMin(t.doneAt)):'start '+hm(plan)}</span><b style="${L.k==='late'&&t.state!=='done'?'color:var(--late)':''}">${t.state==='done'?(t.doneAt<=t.due?'on time ✓':'late'):L.t}</b></div>
+     ${t.state==='done'?'':`<div class="fuse ${L.k==='hot'||L.k==='late'?'hot':''}"><i style="width:${(frac*100).toFixed(1)}%"></i></div>`}
+     <div class="chk">${t.deliv.map(d=>`<i class="${d.got.length?'on':''}"></i>`).join('')}</div>
+     <span class="usual">${t.state==='done'?'took '+(sp>=1?dur(sp):'< 1 min')+' · usual '+dur(t.est):sp>=1?dur(sp)+' in · about '+dur(Math.max(5,t.est-sp))+' to go':'usually takes about '+dur(t.est)}</span>
+     ${t.state==='done'?'<div class="done-stamp"><span>Done ✓</span></div>':`<div class="ft"><button class="nb pri" data-start="${t.id}">${isRun?'❚❚ Pause':sp>=1?'▶ Resume':'▶ Start'}</button><button class="nb" data-open="${t.id}">Open</button><button class="nb ic" data-wait="${t.id}" title="Waiting on the manager">✋</button></div>`}`;
+    tlin.appendChild(el);if(t.state!=='done')dragify(el,t)});
+  tlin.style.height=(44+Math.max(1,lanes.length)*218+10)+'px';
+  $$('[data-start]').forEach(b=>b.onclick=e=>{e.stopPropagation();toggleRun(b.dataset.start)});
+  $$('[data-open]').forEach(b=>b.onclick=e=>{e.stopPropagation();st.focus=b.dataset.open;renderAll()});
+  $$('[data-wait]').forEach(b=>b.onclick=e=>{e.stopPropagation();st.focus=b.dataset.wait;renderAll();const w=$('#whysel');if(w)w.focus()});
+  $$('.note').forEach(el=>el.onclick=()=>{st.focus=el.dataset.id;renderAll()});
+}
+function dragify(el,t){let sx=0,ox=0,moving=false;const tlin=$('#tlin'),slot=$('#slot');
+  el.addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;sx=e.clientX;ox=el.offsetLeft;moving=false;el.setPointerCapture(e.pointerId)});
+  el.addEventListener('pointermove',e=>{if(sx===0)return;const dx=e.clientX-sx;if(Math.abs(dx)>4)moving=true;if(!moving)return;el.classList.add('drag');const nx=Math.max(0,Math.min(tlin.clientWidth-el.offsetWidth,ox+dx));el.style.left=nx+'px';const mins=H0*60+Math.round((nx/tlin.clientWidth*SPAN)/15)*15;slot.classList.add('on');slot.style.left=xOf(mins)+'%';slot.style.width=(t.est/SPAN*100)+'%';slot.dataset.m=mins});
+  const up=async()=>{if(sx===0)return;sx=0;el.classList.remove('drag');slot.classList.remove('on');if(!moving)return;const m=Math.max(H0*60,Math.min(H1*60-30,+slot.dataset.m));if(await act('pin',t.id,{plan:Math.round(mid()+m*60)}))toast(`Pinned “${t.title}” to ${hm(m)} · ${hm(m)}–${hm(m+t.est)} is yours`)};
+  el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up)}
+function rails(){
+  const row=(t,extra,cls='')=>`<div class="srow ${cls}" style="--pc:${cCol(t.client)}" data-open="${t.id}"><span class="d" style="background:${cls?cCol(t.client):'var(--pin)'}"></span><b>${esc(t.title)}</b><small>${extra}</small></div>`;
+  const tray=st.tasks.filter(t=>t.state==='tray');$('#tray').innerHTML=tray.map(t=>row(t,'~'+dur(t.est)+' · due '+hm(toMin(t.due)))).join('')||'<p class="e">Everything has a time. Nice.</p>';
+  const w=st.tasks.filter(t=>t.state==='waiting');$('#waitrail').innerHTML=w.map(t=>row(t,esc(t.waitWhy)+' · since '+hm(toMin(t.waitAt)),'g')).join('')||'<p class="e">Nothing blocked. If you need something from the manager, press ✋ on a note.</p>';
+  const s=st.tasks.filter(t=>t.state==='soon');$('#soon').innerHTML=s.map(t=>row(t,left(t).t,'g')).join('')||'<p class="e">Nothing yet.</p>';
+  const d=st.tasks.filter(t=>t.state==='done');$('#donen').textContent=d.length?d.length+' · '+dur(d.reduce((a,t)=>a+t.spent,0))+' of focused work':'';$('#donerail').innerHTML=d.map(t=>row(t,'done '+hm(toMin(t.doneAt)),'g')).join('')||'<p class="e">The first one is the hardest. Start anything.</p>';
+  $$('.srow[data-open]').forEach(r=>r.onclick=async()=>{const t=st.tasks.find(x=>x.id===r.dataset.open);if(t.state==='tray'){const m=suggestSlot(t);if(await act('pin',t.id,{plan:Math.round(mid()+m*60)}))toast('Pinned to '+hm(m)+' – the next free gap. Drag it to another hour if you like.')}st.focus=t.id;renderAll()})}
+function suggestSlot(t){const busy=st.tasks.filter(x=>dayOf(x.due)<=0&&x.plan!=null&&!['done','waiting','tray','soon'].includes(x.state)&&x!==t).map(x=>[toMin(x.plan),toMin(x.plan)+x.est]).sort((a,b)=>a[0]-b[0]);let m=Math.ceil(nowMin()/15)*15;for(const [a,b] of busy){if(m+t.est<=a)break;m=Math.max(m,b)}return Math.min(m,H1*60-t.est)}
+/* panel */
+function panel(){
+  const p=$('#panel'),t=st.tasks.find(x=>x.id===st.focus),now=nowMin();
+  if(!t){const next=st.tasks.filter(x=>dayOf(x.due)<=0&&['pinned','tray'].includes(x.state)).sort((a,b)=>a.due-b.due)[0];
+    p.innerHTML=`<span class="sticker">one thing at a time</span><p class="cap">Next best move</p>${next?`<h2 style="margin-top:6px">${esc(next.title)}</h2><p class="sub">${esc(next.clientName)} · ${esc(next.fmt)} · ${left(next).t}</p>
+     <div class="tip"><span class="hand">why</span><span>${toMin(next.due)-now<next.est?`It’s the tightest one. Start now and it lands around <b>${hm(now+next.est)}</b>${toMin(next.due)<now?' – already past due, so a quick word to the manager now saves a chase later':' – just past the deadline, so warn the manager now'}.`:`It’s due first, and it usually takes about ${dur(next.est)}. Starting by <b>${hm(Math.max(now,toMin(next.due)-next.est-45))}</b> leaves 45 minutes of slack for exports and surprises.`}</span></div>
+     <div class="btns"><button class="btn sun" id="goNext">▶ Start it now</button><button class="btn ghost" id="openNext">Just open it</button></div>`:`<h2 style="margin-top:6px">Nothing waiting on you.</h2><p class="sub">Enjoy it, or pull something from “Coming up”.</p>`}
+     <div class="wrapup ${now>=1020?'on':''}"><b>Today’s wrap</b><span>${st.tasks.filter(x=>x.state==='done').length} finished · ${dur(st.tasks.filter(x=>x.state==='done').reduce((a,x)=>a+x.spent,0))} of real work · ${(n=>n?n+' roll to tomorrow, pinned at 09:00':'nothing rolls over')(st.tasks.filter(x=>dayOf(x.due)<=0&&!['done','waiting','soon'].includes(x.state)).length)}.</span></div>
+     <p class="mute" style="font-size:11.5px;margin-top:14px">Preview: these notes are sample tasks kept only for you. Start, Pause, Done, Waiting and the times you pin are recorded in the activity log for the admin.</p>`;
+    if(next){$('#goNext').onclick=()=>toggleRun(next.id);$('#openNext').onclick=()=>{st.focus=next.id;renderAll()}}return}
+  const L=left(t),sp=spentOf(t),remaining=Math.max(0,t.est-sp),pct=Math.min(100,sp/t.est*100),finishAt=now+remaining,isRun=!!t.runningSince,dueM=toMin(t.due),allIn=t.deliv.every(d=>d.got.length);
+  p.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><p class="cap" style="color:${cCol(t.client)}">${esc(t.clientName)} · ${esc(t.fmt)} · <span class="mute">${esc(t.id)}</span></p><h2 style="margin-top:6px">${esc(t.title)}</h2><p class="sub">${t.state==='done'?'Done at '+hm(toMin(t.doneAt))+' · took '+dur(t.spent):(t.plan!=null?'Pinned '+hm(toMin(t.plan))+' · ':'')+L.t+(t.state==='waiting'?' · clock paused':'')}</p></div><button class="btn sm ghost" id="closeP" aria-label="Back">←</button></div>
+   ${t.state==='done'?'':`<div class="focusring" style="--p:${pct}"><div><b class="num">${sp>=1||isRun?dur(remaining):dur(t.est)}</b><small>${isRun?'to go · on it':sp>=1?'to go · paused':'usually'}</small></div></div>
+   <p class="sub" style="text-align:center">${isRun?`At this pace you finish around <b>${hm(finishAt)}</b>${finishAt<=dueM?' · '+dur(dueM-finishAt)+' before it’s due':' · <span style="color:var(--late)">'+dur(finishAt-dueM)+' past due – tell the manager early</span>'}`:t.state==='waiting'?'Paused while you wait. This time is not counted against you.':`Start now and you’re done by <b>${hm(finishAt)}</b>`}</p>
+   <div class="btns" style="justify-content:center"><button class="btn sun" id="run" ${t.state==='waiting'?'disabled':''}>${isRun?'❚❚ Pause':sp>=1?'▶ Resume':'▶ Start'}</button><button class="btn mint" id="finish" ${allIn?'':'disabled title="Drop the deliverables first"'}>✓ Done</button></div>`}
+   ${t.changes&&t.changes.length?`<p class="cap" style="margin-top:16px">The manager asked for · Round ${t.round}</p><div class="plist">${t.changes.map(c=>`<div class="pl"><span class="ck"></span><span><b>${esc(c)}</b></span></div>`).join('')}</div>`:''}
+   <p class="cap" style="margin-top:16px">Deliverables</p><div class="plist">${t.deliv.map(d=>`<div class="pl ${d.got.length?'on':''}"><span class="ck">${d.got.length?'✓':''}</span><span><b>${esc(d.n)}</b><small>${d.got.length?esc(d.got.join(', ')):esc(d.spec)}</small></span></div>`).join('')}</div>
+   ${t.state==='done'?'':`<div class="drop" id="drop">Drop files here · they file themselves under <b>${esc(t.id)}</b><br><label for="up">or choose files</label> · <button class="btn sm ghost" id="sim" style="margin-top:6px">simulate the drop</button><input id="up" type="file" multiple hidden><div class="mute" style="font-size:11px;margin-top:6px">Preview: file names are recorded; nothing is sent to Zoho yet.</div></div>
+   <div class="wait"><p class="cap">Need something from the manager?</p>${t.state==='waiting'?`<p class="sub" style="margin-top:8px">Marked waiting (${esc(t.waitWhy)}) since ${hm(toMin(t.waitAt))}. The manager was nudged.</p><button class="btn sm" id="unwait" style="margin-top:8px">They answered – resume</button>`:`<select id="whysel"><option value="">No – I’m fine</option><option>Brief is unclear</option><option>Missing footage / assets</option><option>Need a decision</option><option>Client feedback not in yet</option></select><p class="sub" style="margin-top:6px">Pick a reason: the note goes grey, your clock pauses and the manager gets a nudge. No chasing.</p>`}</div>`}
+   <div class="tip"><span class="hand">tip</span><span>${t.state==='done'?'Nice. The next note is already pinned.':isRun?'Phone face-down, one tab. When the ring fills, you’re done.':L.k==='hot'||L.k==='late'?'Short on time? Ship the main deliverable first, then the extras.':'Press Start even for five minutes. Starting is the whole trick.'}</span></div>`;
+  $('#closeP').onclick=()=>{st.focus=null;renderAll()};
+  const q=s=>$(s,p);
+  if(q('#run'))q('#run').onclick=()=>toggleRun(t.id);
+  if(q('#finish'))q('#finish').onclick=async()=>{const early=dueM-now;if(await act('done',t.id)){st.focus=null;renderAll();toast(early>=0?'Done ✓ · submitted · '+dur(early)+' early':'Done ✓ · submitted')}};
+  if(q('#sim'))q('#sim').onclick=()=>drop(t,t.deliv.filter(d=>!d.got.length).map(d=>t.id.toLowerCase()+'-'+d.n.toLowerCase().replace(/\s+/g,'-')+'.'+(d.kind==='video'?'mp4':d.kind==='pdf'?'pdf':'png')));
+  if(q('#up'))q('#up').onchange=e=>{drop(t,[...e.target.files].map(f=>f.name));e.target.value=''};
+  const d=q('#drop');if(d){['dragenter','dragover'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.add('over')}));['dragleave','drop'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.remove('over')}));d.addEventListener('drop',e=>drop(t,[...e.dataTransfer.files].map(f=>f.name)))}
+  if(q('#whysel'))q('#whysel').onchange=async e=>{if(!e.target.value)return;if(await act('wait',t.id,{why:e.target.value}))toast('Marked waiting · manager nudged · your clock is paused')};
+  if(q('#unwait'))q('#unwait').onclick=async()=>{if(await act('resume',t.id))toast('Back on the desk')};
+}
+async function drop(t,names){if(!names.length)return;if(await act('drop',t.id,{names})){const u=st.tasks.find(x=>x.id===t.id);toast(u.deliv.every(d=>d.got.length)?'All deliverables in. Press Done and it submits.':u.deliv.filter(d=>d.got.length).length+' of '+u.deliv.length+' filed under '+t.id)}}
+async function toggleRun(id){const t=st.tasks.find(x=>x.id===id);if(!t)return;if(t.state==='waiting'){toast('It is waiting on the manager – press “They answered” first');return}
+  if(t.runningSince){if(await act('pause',id))toast('Paused · '+dur(spentOf(st.tasks.find(x=>x.id===id)))+' in')}else{st.focus=id;if(await act('start',id))toast('On it. Finish around '+hm(nowMin()+Math.max(0,t.est-spentOf(t))))}}
+function renderAll(){header();hours();board();rails();panel()}
+$('#tt').oninput=e=>{st.shift=+e.target.value;renderAll()};
+$('#reset').onclick=async()=>{if(await act('reset'))toast('Sample desk reset')};
+(async()=>{try{const me=await api('me.php');st.me=me.user;st.csrf=me.csrf;const j=await api('desk.php?tz='+TZ);st.tasks=j.tasks;st.clients=j.clients;st.skew=j.now-Date.now()/1000;$('#gate').hidden=true;$('#hd').hidden=false;$('#main').hidden=false;renderAll();setInterval(renderAll,30000)}
+  catch(e){if(e.status===401){location.href='./';return}$('#gatemsg').textContent=e.message}})();
+</script></body></html>

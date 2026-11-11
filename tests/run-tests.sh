@@ -3,7 +3,7 @@
 set -u
 PHP=${PHP:-php}; ROOT=$(cd "$(dirname "$0")/.." && pwd)
 T=$(mktemp -d); SITE=$T/public_html; mkdir -p "$SITE"; cp -R "$ROOT/api" "$SITE/api"; cp "$ROOT/index.php" "$SITE/index.php"; printf '<!doctype html><title>APP</title><body>APP-MARKER</body>' > "$SITE/index.html"
-cp "$ROOT/serve.php" "$SITE/serve.php"; mkdir -p "$SITE/assets/kaynes" "$SITE/assets/latchhub"; echo '<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>' > "$SITE/assets/kaynes/logo.svg"; echo '<svg xmlns="http://www.w3.org/2000/svg"/>' > "$SITE/assets/latchhub/favicon.svg"; echo '{"brands":[{"name":"Secret Client"}]}' > "$SITE/brand-hub-data.json"; echo '<?php echo "pwned";' > "$SITE/assets/kaynes/evil.php"; echo hidden > "$SITE/assets/.secret"
+cp "$ROOT/serve.php" "$SITE/serve.php"; cp "$ROOT/desk.html" "$SITE/desk.html"; mkdir -p "$SITE/assets/kaynes" "$SITE/assets/latchhub"; echo '<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>' > "$SITE/assets/kaynes/logo.svg"; echo '<svg xmlns="http://www.w3.org/2000/svg"/>' > "$SITE/assets/latchhub/favicon.svg"; echo '{"brands":[{"name":"Secret Client"}]}' > "$SITE/brand-hub-data.json"; echo '<?php echo "pwned";' > "$SITE/assets/kaynes/evil.php"; echo hidden > "$SITE/assets/.secret"
 cat > "$T/lh-config.php" <<C
 <?php return ['db'=>['dsn'=>'sqlite:$T/t.db'],'zoho'=>['client_id'=>'cid','client_secret'=>'sec','refresh_token'=>'RT','root_folder_id'=>'ROOT000000001','accounts'=>'http://127.0.0.1:8901','api'=>'http://127.0.0.1:8901/workdrive/api/v1','download'=>'http://127.0.0.1:8901/v1/workdrive/download/'],'setup_token'=>'0123456789abcdef0123','max_upload_mb'=>50,'folder_check_ttl'=>2];
 C
@@ -259,6 +259,26 @@ ok "dashboard stats: the client's activity" 1 "$(echo "$ST2" | python3 -c 'impor
 ok "dashboard stats: the designer's sections" 1 "$(echo "$ST2" | python3 -c 'import sys,json;p=[x for x in json.load(sys.stdin)["people"] if x["email"]=="d1@x.com"][0];print(1 if p["cats"]["download"]>=2 and p["cats"]["customise"]>=1 else 0)')"
 ok "dashboard stats: downloaded files are listed" 1 "$(echo "$ST2" | python3 -c 'import sys,json;print(sum(1 for a in json.load(sys.stdin)["top_assets"] if a["name"]=="act_main.svg"))')"
 ok "designer cannot read the dashboard stats" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" "$B/api/stats.php")"
+echo "my desk (preview, mock tasks)"
+DK(){ curl -s -o "$T/last" -w '%{http_code}' -b "$T/cj2" -H "X-LH-CSRF: $CS2" -X POST -H 'Content-Type: application/json' -d "$1" "$B/api/desk.php"; }
+ok "desk needs sign-in" 401 "$(curl -s -o /dev/null -w '%{http_code}' "$B/api/desk.php")"
+D1=$(curl -s -b "$T/cj2" "$B/api/desk.php?tz=330"); ok "desk is seeded with sample notes" 6 "$(echo "$D1" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["tasks"]))')"
+ok "  … using real client names" 1 "$(echo "$D1" | grep -c 'Solid Semi')"
+DID=$(echo "$D1" | python3 -c 'import sys,json;print(json.load(sys.stdin)["tasks"][0]["id"])')
+ok "start a note" 200 "$(DK "{\"action\":\"start\",\"id\":\"$DID\"}")"
+ok "  … it is running" 1 "$(python3 -c "import sys,json;t=[x for x in json.load(open('$T/last'))['tasks'] if x['id']=='$DID'][0];print(1 if t['runningSince'] else 0)")"
+ok "  … recorded in the log (Work on tasks)" 1 "$([ "$(AL 'cat=work' | cnt)" -ge 1 ] && echo 1 || echo 0)"
+ok "waiting on the manager" 200 "$(DK "{\"action\":\"wait\",\"id\":\"$DID\",\"why\":\"Need a decision\"}")"
+ok "  … clock stops while waiting" 1 "$(python3 -c "import sys,json;t=[x for x in json.load(open('$T/last'))['tasks'] if x['id']=='$DID'][0];print(1 if t['state']=='waiting' and not t['runningSince'] else 0)")"
+ok "resume" 200 "$(DK "{\"action\":\"resume\",\"id\":\"$DID\"}")"
+ok "drop files matches deliverables" 200 "$(DK "{\"action\":\"drop\",\"id\":\"$DID\",\"names\":[\"a.mp4\",\"b.png\"]}")"
+ok "  … both filed" 2 "$(python3 -c "import sys,json;t=[x for x in json.load(open('$T/last'))['tasks'] if x['id']=='$DID'][0];print(sum(1 for d in t['deliv'] if d['got']))")"
+ok "done" 200 "$(DK "{\"action\":\"done\",\"id\":\"$DID\"}")"
+ok "  … the finish is in the log" 1 "$([ "$(AL 'action=task_done' | cnt)" -ge 1 ] && echo 1 || echo 0)"
+ok "a note that is not yours is refused" 404 "$(DK '{"action":"start","id":"T-9999"}')"
+ok "desk actions need CSRF" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" -X POST -H 'Content-Type: application/json' -d '{"action":"reset"}' "$B/api/desk.php")"
+ok "the desk page is served to a signed-in person" 200 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj2" "$B/desk.html")"
+ok "no database table was added for the preview" 0 "$(sqlite3 "$T/t.db" ".tables" | tr ' ' '\n' | grep -c 'task')"
 echo "change own name"
 NM(){ curl -s -o "$T/last" -w '%{http_code}' -b "$T/cj2" -H "X-LH-CSRF: $CS2" -X POST -H 'Content-Type: application/json' -d "$1" "$B/api/profile.php"; }
 ok "an empty name is refused" 400 "$(NM '{"name":"   "}')"

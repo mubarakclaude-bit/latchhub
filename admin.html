@@ -9,7 +9,7 @@
   --ok:#0c7a0c;--crit:#d03b3b;
   /* activity sections – categorical slots in fixed order (validated: CVD & normal-vision separation pass; light slots 3–5 are below 3:1, so every chart has labels or a table view) */
   --c-view:#2a78d6;--c-download:#eb6834;--c-customise:#1baf7a;--c-edit:#eda100;--c-delete:#e87ba4;--c-add:#008300;--c-check:#6250d6;
-  --c-auth:#a3a39e;--c-admin:#5f5f5b;--c-error:#d03b3b;
+  --c-work:#e34948;--c-auth:#a3a39e;--c-admin:#5f5f5b;--c-error:#d03b3b;
   /* sequential (heat map) – one hue, light → dark */
   --s1:#cde2fb;--s2:#9ec5f4;--s3:#6da7ec;--s4:#3987e5;--s5:#256abf;--s6:#184f95;--s7:#0d366b}
 *{box-sizing:border-box;margin:0;border-radius:0}
@@ -234,9 +234,9 @@ const perLabel=()=>st.days===365?'12 months':st.days+' days';
 
 /* ======================= sections & actions ======================= */
 /* the order is fixed: it is the colour order, so a section keeps its colour everywhere */
-const WORK=['view','download','customise','edit','delete','add','check'];
-const CATS={view:'Viewed',download:'Downloaded & copied',customise:'Customised',edit:'Edited',delete:'Deleted',add:'Added',check:'Design checks',auth:'Sign-ins & account',admin:'Admin & team',error:'Problems'};
-const CSHORT={view:'Views',download:'Downloads',customise:'Customised',edit:'Edits',delete:'Deletes',add:'Additions',check:'Checks',auth:'Sign-ins',admin:'Admin',error:'Problems'};
+const WORK=['view','download','customise','edit','delete','add','check','work'];
+const CATS={view:'Viewed',download:'Downloaded & copied',customise:'Customised',edit:'Edited',delete:'Deleted',add:'Added',check:'Design checks',work:'Work on tasks',auth:'Sign-ins & account',admin:'Admin & team',error:'Problems'};
+const CSHORT={view:'Views',download:'Downloads',customise:'Customised',edit:'Edits',delete:'Deletes',add:'Additions',check:'Checks',work:'Work',auth:'Sign-ins',admin:'Admin',error:'Problems'};
 const ALL_CATS=[...WORK,'auth','admin','error'];
 const col=c=>`var(--c-${c})`;
 const ICON={
@@ -247,6 +247,7 @@ const ICON={
   delete:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
   add:'<path d="M12 5v14M5 12h14"/>',
   check:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5M8 11l2 2 4-4"/>',
+  work:'<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/>',
   auth:'<rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   admin:'<path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7l8-4z"/>',
   error:'<path d="M12 3l10 18H2L12 3zM12 10v5M12 18v.5"/>'};
@@ -264,6 +265,7 @@ const ALAB={login:'Signed in',logout:'Signed out',login_failed:'Failed to sign i
   swatch_download:'Downloaded colour swatches',asset_download:'Downloaded a file',value_copied:'Copied',
   svg_download:'Recoloured & downloaded a logo',logo_variants:'Made white / greyscale logos',icon_created:'Generated an icon',lens_check:'Ran a Design Lens check',
   client_error:'Saw an error',backup_download:'Downloaded a full backup',backup_restored:'Restored a backup',cleanup_retry:'Retried the Zoho clean-up',selftest:'Ran the Zoho upload test',
+  task_started:'Started working on',task_paused:'Paused',task_done:'Finished & submitted',task_waiting:'Is waiting on the manager',task_resumed:'Resumed after waiting',task_pinned:'Planned a time for',task_files:'Dropped files for',desk_reset:'Reset the sample desk',
   user_created:'Added a person',user_renamed:'Renamed a person',password_reset:'Set a new password for someone',user_switched_off:'Switched someone off',user_switched_on:'Switched someone on'};
 const actLabel=a=>ALAB[a]||String(a).replace(/_/g,' ').replace(/^./,c=>c.toUpperCase());
 

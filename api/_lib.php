@@ -403,7 +403,7 @@ function log_activity(string $action, ?array $user = null, array $o = []): void 
   } catch (Throwable $e) { error_log('LatchHub activity: ' . $e->getMessage()); }
 }
 /* ---------- activity categories: every action belongs to one section of the admin dashboard ---------- */
-const LH_CATS = ['add' => 'Added', 'edit' => 'Edited', 'delete' => 'Deleted', 'download' => 'Downloaded & copied', 'customise' => 'Customised', 'view' => 'Viewed', 'check' => 'Design checks', 'auth' => 'Sign-ins & account', 'admin' => 'Admin & team', 'error' => 'Problems'];
+const LH_CATS = ['add' => 'Added', 'edit' => 'Edited', 'delete' => 'Deleted', 'download' => 'Downloaded & copied', 'customise' => 'Customised', 'view' => 'Viewed', 'check' => 'Design checks', 'work' => 'Work on tasks', 'auth' => 'Sign-ins & account', 'admin' => 'Admin & team', 'error' => 'Problems'];
 function act_cat(string $a): string {
   static $fixed = ['client_created' => 'add', 'file_uploaded' => 'add', 'smart_import' => 'add', 'client_updated' => 'edit', 'client_deleted' => 'delete', 'files_trashed' => 'delete',
     'svg_download' => 'customise', 'logo_variants' => 'customise', 'icon_created' => 'customise', 'value_copied' => 'download', 'lens_check' => 'check',
@@ -411,6 +411,7 @@ function act_cat(string $a): string {
     'login' => 'auth', 'logout' => 'auth', 'password_changed' => 'auth', 'name_changed' => 'auth',
     'client_restored' => 'admin', 'cleanup_retry' => 'admin', 'selftest' => 'admin', 'password_reset' => 'admin', 'backup_restored' => 'admin', 'backup_download' => 'admin'];
   if (isset($fixed[$a])) return $fixed[$a];
+  if (strpos($a, 'task_') === 0 || $a === 'desk_reset') return 'work';
   if (strpos($a, 'user_') === 0) return 'admin';
   if (preg_match('/_added$/', $a)) return 'add';
   if (preg_match('/_(removed|deleted)$/', $a)) return 'delete';
