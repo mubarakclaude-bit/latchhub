@@ -1,55 +1,545 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>LatchHub admin</title>
+<link rel="icon" type="image/svg+xml" href="assets/latchhub/favicon.svg">
 <style>
-:root{color-scheme:light;--bg:#f6f6f7;--panel:#fff;--line:#dcdce0;--ink:#16161a;--mute:#6b6b74;--ok:#15803d;--bad:#b91c1c}   /* dark theme is off for now */
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,sans-serif}
-main{max-width:760px;margin:0 auto;padding:28px 16px 60px}h1{font-size:24px;margin:0 0 4px}h2{font-size:16px;margin:26px 0 8px}.sub{color:var(--mute);margin:0 0 18px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:12px}
-input,select,button{font:inherit;padding:9px 11px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}button{cursor:pointer;background:var(--ink);color:var(--bg);border:0;font-weight:600}button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:500}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.row input{flex:1;min-width:150px}.mute{color:var(--mute)}.ok{color:var(--ok)}.bad{color:var(--bad)}
-table{width:100%;border-collapse:collapse}td{padding:8px 4px;border-top:1px solid var(--line);vertical-align:middle}.msg{min-height:20px;margin:8px 0}
-</style></head><body><main>
-<h1>LatchHub admin</h1><p class="sub">Sign in, check the Zoho connection and manage the team.</p>
-<div id="app"></div></main>
+/* LatchHub admin – same flat, square, Helvetica language as the app and its sign-in page. Light only (dark theme is off platform-wide). */
+:root{color-scheme:light;
+  --bg:#f4f4f2;--panel:#fff;--alt:#f1f1ef;--ink:#101010;--ink2:#4a4a47;--mute:#7c7c79;--line:#e4e4e0;--line2:#c9c9c5;--red:#ff4b2b;--side:#101010;--sidemute:#8d8d89;
+  --ok:#0c7a0c;--crit:#d03b3b;
+  /* activity sections – categorical slots in fixed order (validated: CVD & normal-vision separation pass; light slots 3–5 are below 3:1, so every chart has labels or a table view) */
+  --c-view:#2a78d6;--c-download:#eb6834;--c-customise:#1baf7a;--c-edit:#eda100;--c-delete:#e87ba4;--c-add:#008300;--c-check:#6250d6;
+  --c-auth:#a3a39e;--c-admin:#5f5f5b;--c-error:#d03b3b;
+  /* sequential (heat map) – one hue, light → dark */
+  --s1:#cde2fb;--s2:#9ec5f4;--s3:#6da7ec;--s4:#3987e5;--s5:#256abf;--s6:#184f95;--s7:#0d366b}
+*{box-sizing:border-box;margin:0;border-radius:0}
+html,body{min-height:100%}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 "Helvetica Neue",Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:inherit}
+.cap{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:500}
+.mute{color:var(--mute)}.ok{color:var(--ok)}.bad{color:var(--crit)}
+.num{font-variant-numeric:tabular-nums}
+
+/* ---------- sign in ---------- */
+.login{min-height:100vh;display:grid;grid-template-columns:1.1fr 1fr;background:#101010;color:#fff}
+.login .art{background:var(--red);position:relative;overflow:hidden;padding:36px}
+.login .art h1{position:absolute;left:30px;bottom:-3vw;font-size:15vw;font-weight:500;letter-spacing:-.06em;line-height:1}
+.login .card{display:flex;flex-direction:column;justify-content:center;padding:0 min(8vw,110px)}
+.login h2{font-size:clamp(34px,4vw,54px);font-weight:500;letter-spacing:-.035em;text-transform:uppercase;line-height:.95;margin:10px 0 34px}
+.login label{display:block;margin-top:20px;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#9a9a96}
+.login input{display:block;width:100%;font-size:16px;padding:10px 0;border:0;border-bottom:1px solid #444;background:none;color:#fff}.login input:focus{outline:0;border-color:var(--red)}
+.login button{width:100%;margin-top:36px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:16px 20px;border:0;background:#fff;color:#000;display:flex;justify-content:space-between}.login button:hover{background:var(--red);color:#fff}
+.login .err{min-height:20px;margin-top:14px;color:#ff8a73;font-size:13px}
+@media(max-width:800px){.login{grid-template-columns:1fr;grid-template-rows:24vh 1fr}.login .art h1{font-size:24vw}.login .card{padding:36px 24px}}
+
+/* ---------- shell ---------- */
+.shell{display:grid;grid-template-columns:236px 1fr;min-height:100vh}
+.side{background:var(--side);color:#fff;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:26px 0 18px}
+.brandmark{padding:0 24px 30px}.brandmark b{display:block;font-size:22px;font-weight:500;letter-spacing:-.04em}.brandmark span{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--sidemute)}
+.nav{display:flex;flex-direction:column}
+.nav button{display:flex;align-items:center;gap:12px;padding:11px 24px;border:0;background:none;color:#cfcfcb;text-align:left;font-size:13.5px;position:relative;transition:background .15s,color .15s}
+.nav button svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6}
+.nav button:hover{background:#1c1c1c;color:#fff}
+.nav button.on{color:#fff;background:#1c1c1c}.nav button.on:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--red)}
+.nav .badge{margin-left:auto;font-size:11px;background:var(--crit);color:#fff;padding:0 6px;min-width:18px;text-align:center}
+.side .foot{margin-top:auto;padding:16px 24px 0;border-top:1px solid #262626;font-size:12.5px}
+.side .foot b{display:block;font-weight:500;font-size:13.5px}.side .foot .mute{color:var(--sidemute);word-break:break-all}
+.side .foot .links{display:flex;gap:14px;margin-top:12px}.side .foot a,.side .foot button{background:none;border:0;padding:0;color:#cfcfcb;text-decoration:underline;text-underline-offset:3px;font-size:12px}
+.main{min-width:0;padding:30px clamp(16px,3.2vw,44px) 60px}
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:26px}
+.top h1{font-size:clamp(28px,3.4vw,44px);font-weight:500;letter-spacing:-.035em;text-transform:uppercase;line-height:.95}
+.top p{margin-top:8px;color:var(--ink2);max-width:620px}
+.tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.seg{display:inline-flex;border:1px solid var(--ink);flex-wrap:wrap}
+.seg button{border:0;background:none;padding:7px 12px;font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.seg button+button{border-left:1px solid var(--ink)}
+.seg button.on{background:var(--ink);color:#fff}
+.btn{border:1px solid var(--ink);background:transparent;padding:7px 13px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;display:inline-flex;align-items:center;gap:6px;text-decoration:none;white-space:nowrap}
+.btn:hover{background:var(--ink);color:#fff}
+.btn.pri{background:var(--ink);color:#fff}.btn.pri:hover{background:var(--red);border-color:var(--red)}
+.btn.sm{padding:4px 9px;font-size:10.5px}
+.btn.ghost{border-color:var(--line2)}
+.btn[disabled]{opacity:.5;cursor:default}
+.stamp{font-size:12px;color:var(--mute)}
+@media(max-width:900px){.shell{grid-template-columns:1fr}.side{position:sticky;top:0;z-index:30;height:auto;flex-direction:row;align-items:center;padding:0;overflow-x:auto}
+  .brandmark{padding:12px 16px}.brandmark b{font-size:17px}.brandmark span{display:none}.nav{flex-direction:row}.nav button{padding:16px 12px;white-space:nowrap}.nav button span.t{display:none}.nav button.on:before{left:0;right:0;top:auto;bottom:0;width:auto;height:3px}.side .foot{display:none}
+  .main{padding-top:22px}}
+
+/* ---------- cards & grid ---------- */
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}.g32{grid-template-columns:minmax(0,3fr) minmax(0,2fr)}
+@media(max-width:1100px){.g32,.g2{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);padding:18px 20px;min-width:0}
+.card>header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.card h3{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.card h3+p{font-size:12.5px;color:var(--mute);margin-top:2px}
+.sp{height:16px}
+
+/* KPI tiles */
+.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+@media(max-width:1200px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:560px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{background:var(--panel);padding:16px 18px 12px;border:0;text-align:left;display:flex;flex-direction:column;gap:4px;min-width:0;transition:background .15s}
+.kpi:hover{background:#fafaf8}
+.kpi .v{font-size:32px;font-weight:500;letter-spacing:-.04em;line-height:1.05}
+.kpi .d{font-size:11.5px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi .d b{font-weight:600;color:var(--ink2)}
+.kpi svg{display:block;width:100%;height:28px;margin-top:6px}
+.kpi .lab{display:flex;align-items:center;gap:7px}
+.dot{display:inline-block;width:9px;height:9px;flex:none}
+
+/* charts */
+.chart{position:relative;width:100%;min-height:250px}
+.chart svg{display:block;width:100%;overflow:visible}
+.axis text{font-size:10.5px;fill:var(--mute)}
+.grid-l{stroke:var(--line);stroke-width:1}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:10px}
+.legend button{border:0;background:none;padding:2px 0;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2)}
+.legend button.off{opacity:.38}.legend button.off .dot{background:transparent!important;outline:1.5px solid var(--line2);outline-offset:-1.5px}
+.tip{position:fixed;z-index:200;pointer-events:none;background:#101010;color:#fff;padding:9px 11px;font-size:12px;line-height:1.5;min-width:150px;max-width:280px;box-shadow:0 6px 24px rgba(0,0,0,.25);opacity:0;transform:translateY(4px);transition:opacity .12s,transform .12s}
+.tip.on{opacity:1;transform:none}
+.tip b{font-weight:600}.tip .r{display:flex;align-items:center;gap:12px;justify-content:space-between}.tip .r span:first-child{display:flex;align-items:center;gap:7px}
+.tip .t{color:#a9a9a5;font-size:11px;margin-bottom:4px;letter-spacing:.04em}
+table.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl th{text-align:left;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);font-weight:500;padding:8px;border-bottom:1px solid var(--ink);white-space:nowrap}
+.tbl td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tbl td.n,.tbl th.n{text-align:right;font-variant-numeric:tabular-nums}
+.tbl tr.click{cursor:pointer}.tbl tr.click:hover td{background:#fafaf8}
+.tbl th.sort{cursor:pointer}.tbl th.sort:hover{color:var(--ink)}
+.scroll{overflow-x:auto}
+
+/* horizontal bars */
+.hbars{display:flex;flex-direction:column;gap:9px}
+.hb{display:grid;grid-template-columns:minmax(110px,170px) 1fr 52px;align-items:center;gap:10px;border:0;background:none;padding:2px 0;text-align:left;font-size:12.5px;width:100%}
+.hb:hover .tr{background:#ececea}
+.hb .nm{display:flex;align-items:center;gap:7px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hb .tr{height:12px;background:var(--alt);position:relative;transition:background .15s}
+.hb .fi{position:absolute;left:0;top:0;bottom:0;animation:grow .7s cubic-bezier(.2,.7,.2,1) both;transform-origin:left}
+@keyframes grow{from{transform:scaleX(0)}to{transform:none}}
+.hb .ct{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink2)}
+.stack{display:flex;height:10px;gap:2px;width:100%}
+.stack i{display:block;height:100%;min-width:3px}
+.stack.empty{background:var(--alt)}
+
+/* heat map */
+.heat{display:grid;grid-template-columns:34px repeat(24,minmax(0,1fr));gap:2px;font-size:10px;color:var(--mute)}
+.heat .c{aspect-ratio:1/1;background:var(--alt);min-height:8px}
+.heat .c:hover{outline:2px solid var(--ink);outline-offset:-1px}
+.heat .rl{display:flex;align-items:center}
+.heat .hl{text-align:center;padding-top:3px}
+.scale{display:flex;align-items:center;gap:4px;margin-top:10px;font-size:11px;color:var(--mute);flex-wrap:wrap}.scale i{width:16px;height:9px;display:block}
+
+/* people */
+.av{width:34px;height:34px;flex:none;display:grid;place-items:center;background:var(--ink);color:#fff;font-size:12.5px;font-weight:600;letter-spacing:.02em}
+.av.sm{width:26px;height:26px;font-size:10.5px}.av.lg{width:52px;height:52px;font-size:18px}
+.av.off{background:var(--line2)}
+.who{display:flex;align-items:center;gap:10px;min-width:0}.who>span{min-width:0}.who b{font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.who small{display:block;color:var(--mute);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow{display:grid;grid-template-columns:minmax(140px,1.3fr) 2fr 50px;gap:14px;align-items:center;padding:10px 6px;border:0;border-bottom:1px solid var(--line);background:none;width:100%;text-align:left}
+.prow:hover{background:#fafaf8}
+.prow:last-child{border-bottom:0}
+.people{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:16px}
+.pc{background:var(--panel);border:1px solid var(--line);padding:18px;display:flex;flex-direction:column;gap:14px;transition:border-color .15s;min-width:0}
+.pc:hover{border-color:var(--line2)}
+.pc .h{display:flex;align-items:center;gap:12px}
+.pc .h .who{flex:1}
+.pill{font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border:1px solid var(--line2);color:var(--ink2);white-space:nowrap}
+.pill.adm{border-color:var(--ink);background:var(--ink);color:#fff}
+.pill.off{border-color:var(--crit);color:var(--crit)}
+.pc .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pc .stats div{border-top:1px solid var(--line);padding-top:6px;min-width:0}.pc .stats b{display:block;font-size:20px;font-weight:500;letter-spacing:-.03em}.pc .stats span{font-size:11px;color:var(--mute)}
+.pc .acts{display:flex;gap:6px;flex-wrap:wrap}
+.spark{display:block;width:100%;height:34px}
+
+/* activity feed */
+.tabs{display:flex;overflow-x:auto;border-bottom:1px solid var(--ink);margin-bottom:16px;scrollbar-width:thin}
+.tabs button{border:0;background:none;padding:10px 14px 11px;display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink2);white-space:nowrap;position:relative}
+.tabs button .n{font-size:11px;color:var(--mute);font-variant-numeric:tabular-nums}
+.tabs button:hover{color:var(--ink)}
+.tabs button.on{color:var(--ink);font-weight:600}.tabs button.on:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;background:var(--tc,var(--ink))}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.filters input,.filters select{padding:8px 10px;border:1px solid var(--line2);background:var(--panel);min-width:0;max-width:100%}
+.filters input:focus,.filters select:focus{outline:0;border-color:var(--ink)}
+.filters .grow{flex:1;min-width:160px}
+.day{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);padding:18px 0 6px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between}
+.day:first-child{padding-top:0}
+.ev{display:grid;grid-template-columns:52px 30px minmax(0,1fr);gap:12px;align-items:start;padding:11px 0;border-bottom:1px solid var(--line);animation:in .35s ease both}
+@keyframes in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.ev .tm{font-size:11.5px;color:var(--mute);font-variant-numeric:tabular-nums;padding-top:6px;white-space:nowrap}
+.ico{width:30px;height:30px;display:grid;place-items:center;color:#fff;flex:none}
+.ico svg{width:55%;height:55%;stroke:currentColor;fill:none;stroke-width:2}
+.ev .bd{min-width:0}
+.ev .ln{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 7px}
+.ev .ln .p{font-weight:600;border:0;background:none;padding:0}.ev .ln .p:hover{text-decoration:underline}
+.ev .cl{font-size:11.5px;border:1px solid var(--line2);padding:0 6px;background:none;color:var(--ink2)}.ev .cl:hover{border-color:var(--ink);color:var(--ink)}
+.ev .dt{font-size:12.5px;color:var(--ink2);margin-top:3px;word-break:break-word}
+.ev .sec{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.feed.compact .ev{grid-template-columns:30px minmax(0,1fr) auto;padding:9px 0}.feed.compact .ev .tm{padding-top:2px}
+.empty{padding:34px 0;text-align:center;color:var(--mute)}
+.more{display:flex;justify-content:center;padding-top:16px}
+@media(max-width:560px){.ev{grid-template-columns:30px minmax(0,1fr)}.ev .tm{grid-column:2;order:3;padding-top:0}}
+
+/* drawer & dialogs */
+.veil{position:fixed;inset:0;background:rgba(10,10,10,.42);z-index:90;opacity:0;transition:opacity .2s}
+.veil.on{opacity:1}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--bg);z-index:100;transform:translateX(100%);transition:transform .28s cubic-bezier(.2,.7,.2,1);display:flex;flex-direction:column}
+.drawer.on{transform:none}
+.drawer .dh{background:var(--panel);padding:22px 24px;border-bottom:1px solid var(--line);display:flex;gap:14px;align-items:center}
+.drawer .db{padding:20px 24px;overflow-y:auto;flex:1}
+.x{margin-left:auto;border:0;background:none;font-size:24px;line-height:1;padding:4px 8px}
+.dlg{position:fixed;left:50%;top:50%;transform:translate(-50%,-46%);opacity:0;z-index:110;background:var(--panel);width:min(420px,calc(100% - 32px));padding:22px;transition:transform .2s,opacity .2s;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.dlg.on{opacity:1;transform:translate(-50%,-50%)}
+.dlg h3{font-size:16px;font-weight:600;margin-bottom:6px}
+.dlg p{color:var(--mute);font-size:12.5px;margin-bottom:6px}
+.dlg label{display:block;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin:12px 0 4px}
+.dlg input,.dlg select{width:100%;padding:9px 10px;border:1px solid var(--line2);background:var(--panel)}
+.dlg input:focus,.dlg select:focus{outline:0;border-color:var(--ink)}
+.dlg .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+.dlg .msg{min-height:18px;font-size:12.5px;margin-top:10px;color:var(--crit)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);opacity:0;background:var(--ink);color:#fff;padding:11px 16px;font-size:13px;z-index:220;transition:all .2s;max-width:calc(100% - 32px);pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* clients */
+.sw{display:flex;gap:2px}.sw i{width:11px;height:22px;display:block;border:1px solid rgba(0,0,0,.08)}
+.cname{display:flex;align-items:center;gap:10px;white-space:nowrap}.cname.sub{padding-left:16px}.cname.sub:before{content:"↳";color:var(--mute);margin-right:-4px}
+.checks td:first-child{width:28px;font-weight:700}
+.stat-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+@media(max-width:700px){.stat-row{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat-row div{background:var(--panel);padding:14px 16px;min-width:0}.stat-row b{display:block;font-size:24px;font-weight:500;letter-spacing:-.03em}.stat-row span{font-size:11.5px;color:var(--mute)}
+.skel{background:linear-gradient(90deg,var(--alt),#fafaf8,var(--alt));background-size:200% 100%;animation:sk 1.2s infinite;height:14px;margin:8px 0}
+@keyframes sk{to{background-position:-200% 0}}
+.fade{animation:in .3s ease both}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style></head><body>
+<div id="app"></div><div class="tip" id="tip" role="tooltip"></div><div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script>
-const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+/* ======================= basics ======================= */
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let csrf='',me=null;
 async function api(path,body){const o={credentials:'same-origin',headers:{}};if(body!==undefined){o.method='POST';o.headers['Content-Type']='application/json';o.headers['X-LH-CSRF']=csrf;o.body=JSON.stringify(body)}
   const r=await fetch('api/'+path,o);let j={};try{j=await r.json()}catch{}if(!r.ok)throw Object.assign(new Error(j.error||('Error '+r.status)),{status:r.status});return j}
-async function boot(){try{const j=await api('me.php');me=j.user;csrf=j.csrf;home()}catch{login()}}
-function login(msg=''){$('#app').innerHTML=`<div class="card"><h2 style="margin-top:0">Sign in</h2><form id="f" class="row"><input id="e" type="email" placeholder="Email" required autocomplete="username"><input id="p" type="password" placeholder="Password" required autocomplete="current-password"><button>Sign in</button></form><div class="msg bad">${esc(msg)}</div></div>`;
-  $('#f').onsubmit=async ev=>{ev.preventDefault();try{const j=await api('login.php',{email:$('#e').value,password:$('#p').value});me=j.user;csrf=j.csrf;home()}catch(e){login(e.message)}}}
-async function home(){
-  if(me.role!=='admin'){$('#app').innerHTML=`<div class="card">Signed in as ${esc(me.name)} (designer). Only the admin can use this page.<p><button class="ghost" id="lo">Sign out</button></p></div>`;$('#lo').onclick=out;return}
-  $('#app').innerHTML=`<div class="row" style="justify-content:space-between"><span class="mute">Signed in as <b>${esc(me.name)}</b> (admin)</span><button class="ghost" id="lo">Sign out</button></div>
-  <h2>Zoho connection</h2><div class="card"><button id="hc">Run health check</button><div id="hr" class="msg"></div></div>
-  <div class="card"><button id="st" class="ghost">Test a real upload &amp; download</button> <span class="mute">creates a small test file in Zoho</span><div id="sr" class="msg"></div></div>
-  <h2>Team</h2><div class="card"><table id="tt"></table></div>
-  <h2>Activity</h2><div class="card"><div class="mute" style="margin-bottom:6px">Everything people do in LatchHub: sign-ins, uploads, client changes, deletes, downloads, checks and errors. Times are in your local time.</div><div class="row" id="af"><select id="au"><option value="">Everyone</option></select><select id="aa"><option value="">All actions</option></select><input id="ac" placeholder="Client name"><input id="afr" type="date" title="From"><input id="ato" type="date" title="To"><button class="ghost" id="ago">Search</button><button class="ghost" id="acsv">Download CSV</button></div><table id="al" style="margin-top:8px"></table><div class="row" style="margin-top:8px"><button class="ghost" id="amore" hidden>Load more</button><span class="mute" id="aend"></span></div></div>
-  <h2>Zoho clean-up queue</h2><div class="card"><div class="mute" style="margin-bottom:6px">Files or folders that LatchHub tried to move to the WorkDrive trash but Zoho did not accept yet, with Zoho\'s own answer. Empty means everything was cleaned up.</div><div id="pq"></div><div class="row" style="margin-top:8px"><button class="ghost" id="pr">Retry now</button></div></div>
-  <h2>Deleted clients</h2><div class="card"><div class="mute" style="margin-bottom:6px">Deleting a client moves its Zoho folder to the WorkDrive trash. Restore brings back the client and its folder (Zoho keeps trashed items only for the retention period set in WorkDrive).</div><div id="dc"></div></div>
-  <h2>Add a person</h2><div class="card"><form id="nf" class="row"><input id="nn" placeholder="Name" required><input id="ne" type="email" placeholder="Email" required><select id="nr"><option value="designer">Designer</option><option value="admin">Admin</option></select><input id="np" type="password" placeholder="Password (10+ chars)" minlength="10" required><button>Add</button></form><div id="nm" class="msg"></div></div>`;
-  $('#lo').onclick=out;$('#hc').onclick=health;$('#st').onclick=selftest;deleted();pending();$('#pr').onclick=async()=>{try{const r=await api('brands.php',{action:'retry_pending'});alert(r.done+' moved to the trash, '+r.failed+' still refused.');pending()}catch(e){alert(e.message)}};$('#nf').onsubmit=addUser;team();activityInit()}
+const toast=(t,ms=3200)=>{const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),ms)};
+const fmt=n=>(+n||0).toLocaleString();
+const mb=b=>{b=+b||0;return b>=1073741824?(b/1073741824).toFixed(2)+' GB':b>=1048576?(b/1048576).toFixed(1)+' MB':Math.round(b/1024)+' KB'};
+const utc=s=>s?new Date(String(s).replace(' ','T')+'Z'):null;
+const tLocal=s=>{const d=utc(s);return d&&!isNaN(d)?d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''};
+const dLocal=s=>{const d=utc(s);return d&&!isNaN(d)?d.toLocaleString([],{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):String(s||'')};
+const ago=s=>{const d=utc(s);if(!d||isNaN(d))return 'never';const m=Math.round((Date.now()-d)/60000);if(m<1)return 'just now';if(m<60)return m+' min ago';const h=Math.round(m/60);if(h<24)return h+' h ago';const dd=Math.round(h/24);return dd<30?dd+' day'+(dd>1?'s':'')+' ago':d.toLocaleDateString([],{day:'numeric',month:'short',year:'numeric'})};
+const initials=n=>String(n||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?';
+const dayKey=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const parseDay=k=>{const[y,m,d]=k.split('-').map(Number);return new Date(y,m-1,d)};
+const perLabel=()=>st.days===365?'12 months':st.days+' days';
+
+/* ======================= sections & actions ======================= */
+/* the order is fixed: it is the colour order, so a section keeps its colour everywhere */
+const WORK=['view','download','customise','edit','delete','add','check'];
+const CATS={view:'Viewed',download:'Downloaded & copied',customise:'Customised',edit:'Edited',delete:'Deleted',add:'Added',check:'Design checks',auth:'Sign-ins & account',admin:'Admin & team',error:'Problems'};
+const CSHORT={view:'Views',download:'Downloads',customise:'Customised',edit:'Edits',delete:'Deletes',add:'Additions',check:'Checks',auth:'Sign-ins',admin:'Admin',error:'Problems'};
+const ALL_CATS=[...WORK,'auth','admin','error'];
+const col=c=>`var(--c-${c})`;
+const ICON={
+  view:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  download:'<path d="M12 3v12M6 10l6 6 6-6M4 21h16"/>',
+  customise:'<path d="M12 3a9 9 0 1 0 0 18c1.2 0 2-.8 2-2 0-.5-.2-1-.6-1.4-.3-.4-.5-.8-.5-1.3 0-1.1.9-2 2-2H17a5 5 0 0 0 5-5c0-3.6-4.5-6.3-10-6.3z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16.5" cy="10.5" r="1"/>',
+  edit:'<path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/>',
+  delete:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  add:'<path d="M12 5v14M5 12h14"/>',
+  check:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5M8 11l2 2 4-4"/>',
+  auth:'<rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  admin:'<path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7l8-4z"/>',
+  error:'<path d="M12 3l10 18H2L12 3zM12 10v5M12 18v.5"/>'};
+const ico=(c,sz)=>`<span class="ico" style="background:${col(c)}${sz?`;width:${sz}px;height:${sz}px`:''}" aria-hidden="true"><svg viewBox="0 0 24 24">${ICON[c]||ICON.edit}</svg></span>`;
+const ALAB={login:'Signed in',logout:'Signed out',login_failed:'Failed to sign in',login_blocked:'Sign-in locked (too many tries)',password_changed:'Changed their password',password_change_failed:'Typed a wrong old password',name_changed:'Changed their name',
+  client_created:'Created a client',client_updated:'Saved a client',client_deleted:'Deleted a client',client_restored:'Restored a client',client_renamed:'Renamed a client',client_moved:'Moved a client',client_opened:'Opened a client',section_viewed:'Jumped to a section',link_opened:'Opened a link',
+  file_uploaded:'Uploaded a file to Zoho',files_trashed:'Moved files to the Zoho trash',smart_import:'Smart-imported a brand book',
+  logo_added:'Added a logo',logo_removed:'Deleted a logo',logo_renamed:'Renamed a logo',logo_edited:'Edited a logo',logo_download:'Downloaded a logo',
+  element_added:'Added an element',element_removed:'Deleted an element',element_renamed:'Renamed an element',element_edited:'Edited an element',element_download:'Downloaded an element',
+  font_added:'Added a font',font_removed:'Deleted a font',font_renamed:'Renamed a font',font_edited:'Edited a font',font_download:'Got a font',
+  colour_added:'Added a colour',colour_removed:'Deleted a colour',colour_renamed:'Renamed a colour',colour_edited:'Changed a colour',
+  link_added:'Added a link',link_removed:'Deleted a link',link_renamed:'Renamed a link',link_edited:'Edited a link',
+  brand_book_added:'Added the brand book',brand_book_removed:'Removed the brand book',brand_book_replaced:'Replaced the brand book',brand_book_download:'Downloaded the brand book',
+  rules_edited:'Edited the brand rules',description_edited:'Edited the description',icon_style_edited:'Changed the icon style',
+  swatch_download:'Downloaded colour swatches',asset_download:'Downloaded a file',value_copied:'Copied',
+  svg_download:'Recoloured & downloaded a logo',logo_variants:'Made white / greyscale logos',icon_created:'Generated an icon',lens_check:'Ran a Design Lens check',
+  client_error:'Saw an error',backup_download:'Downloaded a full backup',backup_restored:'Restored a backup',cleanup_retry:'Retried the Zoho clean-up',selftest:'Ran the Zoho upload test',
+  user_created:'Added a person',user_renamed:'Renamed a person',password_reset:'Set a new password for someone',user_switched_off:'Switched someone off',user_switched_on:'Switched someone on'};
+const actLabel=a=>ALAB[a]||String(a).replace(/_/g,' ').replace(/^./,c=>c.toUpperCase());
+
+/* ======================= state ======================= */
+const st={view:'overview',days:30,stats:null,hidden:new Set(),chartMode:'chart',
+  act:{cat:'',user:'',client:'',q:'',from:'',to:'',before:null,rows:[],done:false,fresh:true},
+  sort:{k:'events',d:-1}};
+try{const v=JSON.parse(localStorage.getItem('lh-admin')||'{}');if([7,30,90,365].includes(v.days))st.days=v.days;if(['overview','activity','team','clients','system'].includes(v.view))st.view=v.view}catch{}
+const remember=()=>{try{localStorage.setItem('lh-admin',JSON.stringify({days:st.days,view:st.view}))}catch{}};
+
+/* ======================= sign in ======================= */
+async function boot(){try{const j=await api('me.php');me=j.user;csrf=j.csrf;start()}catch{login()}}
+function login(msg=''){
+  document.title='Sign in · LatchHub admin';
+  $('#app').innerHTML=`<div class="login"><div class="art"><span class="cap" style="color:#fff">Latch Infinity — Admin</span><h1>LatchHub</h1></div><main class="card"><span class="cap">Admin sign in</span><h2>Team<br>overview</h2>
+  <form id="f"><label for="e">Email</label><input id="e" type="email" required autocomplete="username" autocapitalize="none" spellcheck="false" autofocus><label for="p">Password</label><input id="p" type="password" required autocomplete="current-password"><button><span>Sign in</span><span>→</span></button><div class="err" role="alert">${esc(msg)}</div></form></main></div>`;
+  $('#f').onsubmit=async ev=>{ev.preventDefault();const b=$('#f button');b.disabled=true;try{const j=await api('login.php',{email:$('#e').value,password:$('#p').value});me=j.user;csrf=j.csrf;start()}catch(e){login(e.message)}}}
 async function out(){try{await api('logout.php',{})}catch{}me=null;login()}
-async function health(){$('#hr').textContent='Checking…';try{const j=await api('health.php');$('#hr').innerHTML=`<div class="${j.all_ok?'ok':'bad'}"><b>${j.all_ok?'Everything required is working.':'Something needs attention.'}</b></div><table>`+j.checks.map(c=>`<tr><td class="${c.ok?'ok':'bad'}">${c.ok?'✓':'✕'}</td><td>${esc(c.check)}</td><td class="mute">${esc(c.note)}</td></tr>`).join('')+`</table>`}catch(e){$('#hr').innerHTML=`<span class="bad">${esc(e.message)}</span>`}}
-async function selftest(){$('#sr').textContent='Testing – creating a folder, uploading, downloading…';try{const j=await api('selftest.php',{});$('#sr').innerHTML=`<div class="${j.all_ok?'ok':'bad'}"><b>${j.all_ok?'Uploading and downloading work.':'A step failed – details below.'}</b></div><table>`+j.steps.map(c=>`<tr><td class="${c.ok?'ok':'bad'}">${c.ok?'✓':'✕'}</td><td>${esc(c.step)}</td><td class="mute">${esc(c.note)}</td></tr>`).join('')+`</table>`}catch(e){$('#sr').innerHTML=`<span class="bad">${esc(e.message)}</span>`}}
-async function pending(){try{const j=await api('brands.php?pending=1');$('#pq').innerHTML=j.pending.length?`<table>`+j.pending.map(p=>`<tr><td><b>${esc(p.kind)}</b> <span class="mute">${esc(p.zoho_id)}</span><br><span class="mute">${esc(p.created_at)} · tried ${+p.tries} time(s)</span></td><td class="bad" style="font-size:12px">${esc(p.reason)}</td></tr>`).join('')+`</table>`:'<span class="ok">Nothing waiting.</span>'}catch(e){$('#pq').innerHTML=`<span class="bad">${esc(e.message)}</span>`}}
-async function deleted(){try{const j=await api('brands.php?deleted=1');$('#dc').innerHTML=j.deleted.length?`<table>`+j.deleted.map(d=>`<tr><td><b>${esc(d.name)}</b><br><span class="mute">deleted ${esc(d.deleted_at)}${d.by_name?' by '+esc(d.by_name):''}</span></td><td style="text-align:right"><button class="ghost" data-rs="${esc(d.id)}">Restore</button></td></tr>`).join('')+`</table>`:'<span class="mute">None.</span>';
-  $('#dc').querySelectorAll('[data-rs]').forEach(b=>b.onclick=async()=>{if(!confirm('Restore this client and its Zoho folder?'))return;try{await api('brands.php',{action:'restore',id:b.dataset.rs});alert('Restored. Designers will see it again within a minute.');deleted()}catch(e){alert(e.message)}})}catch(e){$('#dc').innerHTML=`<span class="bad">${esc(e.message)}</span>`}}
-const ALAB={login:'Signed in',logout:'Signed out',login_failed:'Failed sign-in',login_blocked:'Sign-in locked',client_created:'Client created',client_updated:'Client changed',client_deleted:'Client deleted',client_restored:'Client restored',file_uploaded:'File uploaded',svg_download:'SVG/PNG downloaded',lens_check:'Design Lens check',logo_variants:'White/grey logos made',client_error:'Error on screen',cleanup_retry:'Clean-up retried',user_created:'Person added',password_reset:'Password reset',user_switched_off:'Person switched off',user_switched_on:'Person switched on',selftest:'Upload test',password_changed:'Changed own password',password_change_failed:'Wrong old password'};
-const ABAD=new Set(['password_change_failed','login_failed','login_blocked','client_error']);
-let aBefore=null,aUsers={};
-const local=s=>{const d=new Date(String(s).replace(' ','T')+'Z');return isNaN(d)?s:d.toLocaleString([], {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})};
-function aq(extra){const p=new URLSearchParams();if($('#au').value)p.set('user',$('#au').value);if($('#aa').value)p.set('action',$('#aa').value);if($('#ac').value.trim())p.set('client',$('#ac').value.trim());if($('#afr').value)p.set('from',$('#afr').value);if($('#ato').value)p.set('to',$('#ato').value);for(const k in extra||{})p.set(k,extra[k]);return p.toString()}
-async function activityInit(){try{const [u,a]=await Promise.all([api('users.php'),api('activity.php?actions=1')]);u.users.forEach(x=>{$('#au').insertAdjacentHTML('beforeend',`<option value="${x.id}">${esc(x.name)}</option>`)});a.actions.forEach(x=>{$('#aa').insertAdjacentHTML('beforeend',`<option value="${esc(x)}">${esc(ALAB[x]||x)}</option>`)})}catch{}
-  $('#ago').onclick=()=>activityLoad(true);$('#amore').onclick=()=>activityLoad(false);$('#acsv').onclick=()=>{location.href='api/activity.php?'+aq({format:'csv'})};activityLoad(true)}
-async function activityLoad(reset){try{if(reset){aBefore=null;$('#al').innerHTML=''}const j=await api('activity.php?'+aq(aBefore?{before:aBefore}:{}));
-  $('#al').insertAdjacentHTML('beforeend',j.events.map(e=>`<tr><td class="mute" style="white-space:nowrap">${esc(local(e.at))}</td><td><b>${esc(e.user_name||'—')}</b>${e.role?` <span class="mute">${esc(e.role)}</span>`:''}</td><td class="${ABAD.has(e.action)?'bad':''}">${esc(ALAB[e.action]||e.action)}${e.client_name?`<br><span class="mute">${esc(e.client_name)}</span>`:''}</td><td class="mute" style="font-size:12px">${esc(e.details)}</td></tr>`).join(''));
-  aBefore=j.next;$('#amore').hidden=!j.next;$('#aend').textContent=$('#al').rows.length?(j.next?'':'End of the list.'):'Nothing recorded yet.'}catch(e){$('#aend').innerHTML=`<span class="bad">${esc(e.message)}</span>`}}
-async function team(){const j=await api('users.php');let sm={};try{sm=(await api('activity.php?summary=1')).summary}catch{}aUsers=sm;$('#tt').innerHTML=j.users.map(u=>`<tr><td><b>${esc(u.name)}</b><br><span class="mute">${esc(u.email)}</span></td><td>${esc(u.role)}</td><td class="${+u.active?'ok':'bad'}">${+u.active?'active':'off'}<br><span class="mute" style="font-size:11px">${sm[u.id]?'last seen '+esc(local(sm[u.id].last_at))+'<br>30 days: '+(+sm[u.id].logins)+' sign-ins, '+(+sm[u.id].uploads)+' uploads, '+(+sm[u.id].changes)+' changes':'no activity yet'}</span></td><td style="text-align:right"><button class="ghost" data-pw="${u.id}">New password</button> <button class="ghost" data-act="${u.id}" data-on="${+u.active?0:1}">${+u.active?'Switch off':'Switch on'}</button></td></tr>`).join('');
-  $('#tt').querySelectorAll('[data-pw]').forEach(b=>b.onclick=async()=>{const p=prompt('New password (10+ characters):');if(!p)return;try{await api('users.php',{action:'password',id:+b.dataset.pw,password:p});alert('Password changed.')}catch(e){alert(e.message)}});
-  $('#tt').querySelectorAll('[data-act]').forEach(b=>b.onclick=async()=>{try{await api('users.php',{action:'active',id:+b.dataset.act,active:+b.dataset.on});team()}catch(e){alert(e.message)}})}
-async function addUser(ev){ev.preventDefault();try{await api('users.php',{action:'create',name:$('#nn').value,email:$('#ne').value,role:$('#nr').value,password:$('#np').value});$('#nf').reset();$('#nm').innerHTML='<span class="ok">Added.</span>';team()}catch(e){$('#nm').innerHTML=`<span class="bad">${esc(e.message)}</span>`}}
+function start(){
+  if(me.role!=='admin'){$('#app').innerHTML=`<div class="login"><div class="art"><h1>LatchHub</h1></div><main class="card"><span class="cap">Signed in as ${esc(me.name)}</span><h2>Admins<br>only</h2><p style="color:#bbb">Only the admin can use this page. Your work is in the brand hub.</p><button id="go"><span>Open LatchHub</span><span>→</span></button><button id="lo" style="margin-top:10px;background:none;color:#fff;border:1px solid #444"><span>Sign out</span><span></span></button></main></div>`;$('#go').onclick=()=>location.href='./';$('#lo').onclick=out;return}
+  document.title='LatchHub admin';shell();load()}
+
+/* ======================= shell ======================= */
+const NAV=[['overview','Overview','<path d="M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z"/>'],['activity','Activity','<path d="M3 12h4l3-8 4 16 3-8h4"/>'],['team','Team','<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c1.8.7 3 2.4 3.5 5.2"/>'],['clients','Clients','<path d="M3 7h18v13H3zM8 7V4h8v3"/>'],['system','Zoho & system','<path d="M7 18a5 5 0 0 1-.6-10A6.5 6.5 0 0 1 19 9.5a4.3 4.3 0 0 1-1 8.5z"/>']];
+const TITLES={overview:['Overview','What the team did in LatchHub, at a glance.'],activity:['Activity','Every action, by section: what was viewed, downloaded, customised, added, edited or deleted – by whom, for which client, and when.'],team:['Team','The people who use LatchHub, what each of them does, and their accounts.'],clients:['Clients','Every client in LatchHub: its assets, what is stored in Zoho and how much the team uses it.'],system:['Zoho & system','The Zoho WorkDrive connection, storage, the clean-up queue and deleted clients.']};
+function shell(){
+  $('#app').innerHTML=`<div class="shell"><aside class="side"><div class="brandmark"><b>LatchHub</b><span>Admin</span></div><nav class="nav" aria-label="Admin sections">${NAV.map(n=>`<button data-nav="${n[0]}" title="${n[1]}"><svg viewBox="0 0 24 24" aria-hidden="true">${n[2]}</svg><span class="t">${n[1]}</span>${n[0]==='system'?'<span class="badge" id="sysb" hidden></span>':''}</button>`).join('')}</nav>
+  <div class="foot"><b id="mename">${esc(me.name)}</b><span class="mute">${esc(me.email)}</span><div class="links"><a href="./">Open LatchHub</a><button id="lo">Sign out</button></div></div></aside>
+  <main class="main"><div class="top"><div><h1 id="ttl"></h1><p id="sub"></p></div><div class="tools" id="tools"></div></div><div id="view"></div></main></div>`;
+  $$('[data-nav]').forEach(b=>b.onclick=()=>go(b.dataset.nav));$('#lo').onclick=out}
+function go(v,opts){st.view=v;remember();if(v==='activity'&&opts){Object.assign(st.act,{cat:'',user:'',client:'',q:'',from:'',to:''},opts);st.act.fresh=true}render();window.scrollTo({top:0})}
+function tools(){
+  const per=`<div class="seg" role="group" aria-label="Period">${[[7,'7 days'],[30,'30 days'],[90,'90 days'],[365,'12 months']].map(p=>`<button data-days="${p[0]}" class="${st.days===p[0]?'on':''}" aria-pressed="${st.days===p[0]}">${p[1]}</button>`).join('')}</div>`;
+  const t=st.loadedAt?`<span class="stamp">Updated ${new Date(st.loadedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>`:'';
+  $('#tools').innerHTML=(st.view==='system'?'':per)+`<button class="btn ghost" id="rf" title="Refresh">↻ Refresh</button>`+t;
+  $$('[data-days]').forEach(b=>b.onclick=()=>{st.days=+b.dataset.days;remember();load()});$('#rf').onclick=()=>load()}
+async function load(){
+  try{st.stats=await api('stats.php?days='+st.days+'&tz='+(-new Date().getTimezoneOffset()));st.loadedAt=Date.now();const mine=st.stats.people.find(p=>p.id===me.id);if(mine){me.name=mine.name;const n=$('#mename');if(n)n.textContent=mine.name}}
+  catch(e){if(e.status===401){login('Your session ended – please sign in again.');return}toast(e.message,6000)}
+  st.act.fresh=true;render()}
+function render(){
+  $$('[data-nav]').forEach(b=>{b.classList.toggle('on',b.dataset.nav===st.view);b.setAttribute('aria-current',b.dataset.nav===st.view?'page':'false')});
+  const [t,s]=TITLES[st.view];$('#ttl').textContent=t;$('#sub').textContent=s;tools();
+  const w=st.stats&&st.stats.platform.cleanup_waiting,sb=$('#sysb');if(sb){sb.hidden=!w;sb.textContent=w||''}
+  const v=$('#view');hideTip();
+  if(!st.stats){v.innerHTML=`<div class="card">${'<div class="skel"></div>'.repeat(6)}</div>`;return}
+  ({overview:viewOverview,activity:viewActivity,team:viewTeam,clients:viewClients,system:viewSystem})[st.view](v)}
+
+/* ======================= tooltip ======================= */
+const tip=$('#tip');
+function moveTip(e){const r=tip.getBoundingClientRect(),pad=14;let x=e.clientX+pad,y=e.clientY+pad;if(x+r.width>innerWidth-8)x=e.clientX-r.width-pad;if(y+r.height>innerHeight-8)y=e.clientY-r.height-pad;tip.style.left=Math.max(8,x)+'px';tip.style.top=Math.max(8,y)+'px'}
+function hideTip(){tip.classList.remove('on');tip._k=null}
+function bindTips(root,fn){if(root._tips){root._tips=fn;return}root._tips=fn;
+  root.addEventListener('pointermove',e=>{const t=e.target.closest('[data-tip]');if(t&&root.contains(t)){if(tip._k!==t){const h=root._tips(t);if(!h){hideTip();return}tip.innerHTML=h;tip._k=t;tip.classList.add('on')}moveTip(e);return}hideTip()});
+  root.addEventListener('pointerleave',hideTip)}
+
+/* ======================= small charts ======================= */
+function sparkline(vals,color,cls){
+  const n=vals.length;if(!n)return'';const max=Math.max(1,...vals),W=200,H=28;const x=i=>n<2?W/2:i*(W/(n-1)),y=v=>H-2-(v/max)*(H-6);
+  const pts=vals.map((v,i)=>x(i).toFixed(1)+','+y(v).toFixed(1)).join(' ');
+  return`<svg ${cls?`class="${cls}"`:''} viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,${H} ${pts} ${W},${H}" fill="${color}" opacity=".12"/><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`}
+/* buckets: days, or weeks when the period is long */
+function buckets(daily){
+  const f=d=>parseDay(d).toLocaleDateString([],{day:'numeric',month:'short'});
+  if(daily.length<=45)return daily.map(d=>({k:d.d,label:f(d.d),long:parseDay(d.d).toLocaleDateString([],{weekday:'long',day:'numeric',month:'long'}),c:d.c}));
+  const out=[];for(let i=0;i<daily.length;i+=7){const sl=daily.slice(i,i+7),c={};ALL_CATS.forEach(k=>c[k]=sl.reduce((a,d)=>a+(d.c[k]||0),0));
+    out.push({k:sl[0].d,label:f(sl[0].d),long:'Week of '+f(sl[0].d)+' – '+f(sl[sl.length-1].d),c})}return out}
+function niceMax(v){if(v<=4)return 4;const p=Math.pow(10,Math.floor(Math.log10(v))),m=v/p;return(m<=1?1:m<=2?2:m<=2.5?2.5:m<=5?5:10)*p}
+function stackedColumns(el,daily){
+  const B=buckets(daily),show=WORK.filter(c=>!st.hidden.has(c));
+  const W=Math.max(300,el.clientWidth||700),H=250,ml=40,mr=6,mt=10,mb=26,iw=W-ml-mr,ih=H-mt-mb;
+  const tot=B.map(b=>show.reduce((a,c)=>a+(b.c[c]||0),0)),max=niceMax(Math.max(1,...tot));
+  const bw=iw/B.length,gap=Math.max(1,Math.min(6,bw*.28)),cw=Math.max(1,bw-gap),y=v=>mt+ih-(v/max)*ih;
+  let g='';for(let i=0;i<=4;i++){const v=max*i/4,yy=y(v);g+=`<line class="grid-l" x1="${ml}" x2="${W-mr}" y1="${yy}" y2="${yy}"/><text x="${ml-8}" y="${yy+3.5}" text-anchor="end">${fmt(Math.round(v))}</text>`}
+  let bars='',hits='';const every=Math.ceil(B.length/Math.max(2,Math.floor(iw/62)));
+  B.forEach((b,i)=>{const x=ml+i*bw+gap/2;let acc=0;
+    show.forEach(c=>{const v=b.c[c]||0;if(!v)return;const y0=y(acc),y1=y(acc+v),h=Math.max(0,y0-y1-(acc>0?2:0));if(h>0)bars+=`<rect x="${x.toFixed(2)}" y="${y1.toFixed(2)}" width="${cw.toFixed(2)}" height="${h.toFixed(2)}" fill="${col(c)}"/>`;acc+=v});
+    hits+=`<rect data-tip="${i}" x="${(ml+i*bw).toFixed(2)}" y="${mt}" width="${bw.toFixed(2)}" height="${ih}" fill="transparent"/>`;
+    if(i%every===0)g+=`<text x="${(x+cw/2).toFixed(1)}" y="${H-8}" text-anchor="middle">${esc(b.label)}</text>`});
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Actions per ${daily.length>45?'week':'day'}, stacked by section. A table view is available."><g class="axis">${g}</g>${bars}<line x1="${ml}" x2="${W-mr}" y1="${mt+ih}" y2="${mt+ih}" stroke="var(--ink)" stroke-width="1"/><g>${hits}</g></svg>`;
+  bindTips(el,t=>{const b=B[+t.dataset.tip];if(!b)return'';const rows=show.slice().reverse().filter(c=>b.c[c]),tt=show.reduce((a,c)=>a+(b.c[c]||0),0);
+    return`<div class="t">${esc(b.long)}</div>`+(rows.length?rows.map(c=>`<div class="r"><span><i class="dot" style="background:${col(c)}"></i>${CATS[c]}</span><b>${fmt(b.c[c])}</b></div>`).join('')+`<div class="r" style="border-top:1px solid #333;margin-top:4px;padding-top:4px"><span>Total</span><b>${fmt(tt)}</b></div>`:'No activity')})}
+function heatmap(el,heat){
+  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],long=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],flat=heat.flat(),max=Math.max(0,...flat),steps=['--s1','--s2','--s3','--s4','--s5','--s6','--s7'];
+  const step=v=>v<=0?null:steps[Math.min(6,Math.floor((v/max)*6.999))];
+  let best=[0,0];heat.forEach((r,d)=>r.forEach((v,x)=>{if(v>heat[best[0]][best[1]])best=[d,x]}));
+  let h='<span></span>';for(let x=0;x<24;x++)h+=`<span class="hl">${x%3===0?String(x).padStart(2,'0'):''}</span>`;
+  const rows=heat.map((r,d)=>`<span class="rl">${days[d]}</span>`+r.map((v,x)=>{const s=step(v);return`<span class="c" data-tip="${d},${x}"${s?` style="background:var(${s})"`:''}></span>`}).join('')).join('');
+  el.innerHTML=`<div class="heat" role="img" aria-label="Actions by weekday and hour">${rows}${h}</div><div class="scale"><span>Less</span>${steps.map(s=>`<i style="background:var(${s})"></i>`).join('')}<span>More</span><span style="margin-left:auto">${max?'Busiest: <b style="color:var(--ink2)">'+long[best[0]]+' '+String(best[1]).padStart(2,'0')+':00</b>':'No activity yet'}</span></div>`;
+  bindTips(el,t=>{const[d,x]=t.dataset.tip.split(',').map(Number);return`<div class="t">${long[d]} · ${String(x).padStart(2,'0')}:00–${String(x+1).padStart(2,'0')}:00</div><b>${fmt(heat[d][x])}</b> action${heat[d][x]===1?'':'s'}`})}
+function catStack(cats,total){if(!total)return'<div class="stack empty"></div>';return`<div class="stack">${ALL_CATS.filter(c=>cats[c]).map(c=>`<i data-tip="${c}" style="width:${(cats[c]/total*100).toFixed(2)}%;background:${col(c)}"></i>`).join('')}</div>`}
+const delta=(a,b)=>{if(!b&&!a)return'no change';if(!b)return'<b>new</b> this period';const p=Math.round((a-b)/b*100);return`<b>${p>0?'▲':p<0?'▼':'■'} ${Math.abs(p)}%</b> vs previous`};
+function stackTips(root){bindTips(root,t=>{const row=t.closest('[data-row]');if(!row)return'';const p=st.stats.people.find(x=>x.id==row.dataset.row),c=t.dataset.tip;return p?`<div class="t">${esc(p.name)}</div><div class="r"><span><i class="dot" style="background:${col(c)}"></i>${CATS[c]}</span><b>${fmt(p.cats[c])}</b></div>`:''})}
+
+/* ======================= overview ======================= */
+function viewOverview(v){
+  const S=st.stats,T=S.totals,P=S.prev,sum=o=>ALL_CATS.reduce((a,c)=>a+(o[c]||0),0),all=sum(T),allP=sum(P);
+  const series=c=>S.daily.map(d=>c?[].concat(c).reduce((a,k)=>a+(d.c[k]||0),0):sum(d.c));
+  const activeP=S.people.filter(p=>p.active&&p.total>0).length,idle=S.people.filter(p=>p.active&&!p.total).length;
+  const kp=(lab,val,sub,ser,color,g)=>`<button class="kpi" data-go="${g}"><span class="lab cap">${color?`<i class="dot" style="background:${color}"></i>`:''}${lab}</span><span class="v num">${val}</span><span class="d">${sub}</span>${ser?sparkline(ser,color||'var(--ink)'):'<svg></svg>'}</button>`;
+  const pl=S.platform,sto=S.storage,saved=sto.orig_bytes>0?Math.max(0,Math.round((1-sto.bytes/sto.orig_bytes)*100)):0;
+  const people=S.people.slice().sort((a,b)=>b.total-a.total);
+  const clients=S.clients.filter(c=>c.events>0).sort((a,b)=>b.events-a.events).slice(0,8),cmax=Math.max(1,...clients.map(c=>c.events));
+  const catMax=Math.max(1,...ALL_CATS.map(c=>T[c]));
+  v.innerHTML=`<div class="fade">
+  <div class="kpis">
+    ${kp('All actions',fmt(all),delta(all,allP),series(),'','activity:')}
+    ${kp('Active people',activeP+'<span class="mute" style="font-size:18px"> / '+pl.people_active+'</span>',idle?idle+' with no activity':'everyone was active','','','team')}
+    ${kp('Downloads',fmt(T.download+T.customise),delta(T.download+T.customise,P.download+P.customise),series(['download','customise']),col('download'),'activity:download')}
+    ${kp('Added',fmt(T.add),delta(T.add,P.add),series('add'),col('add'),'activity:add')}
+    ${kp('Deleted',fmt(T.delete),delta(T.delete,P.delete),series('delete'),col('delete'),'activity:delete')}
+    ${kp('Problems',fmt(T.error),T.error?delta(T.error,P.error):'<span class="ok">✓ none</span>',series('error'),col('error'),'activity:error')}
+  </div>
+  <div class="sp"></div>
+  <div class="card"><header><div><h3>Activity over time</h3><p>Everything people did, ${S.daily.length>45?'per week':'per day'}, by section. Click a section in the legend to hide or show it.</p></div><div class="seg"><button data-cm="chart" class="${st.chartMode==='chart'?'on':''}">Chart</button><button data-cm="table" class="${st.chartMode==='table'?'on':''}">Table</button></div></header>
+    <div id="cA" class="chart"></div>
+    <div class="legend">${WORK.map(c=>`<button data-hide="${c}" class="${st.hidden.has(c)?'off':''}" aria-pressed="${!st.hidden.has(c)}"><i class="dot" style="background:${col(c)}"></i>${CATS[c]} <span class="mute num">${fmt(T[c])}</span></button>`).join('')}</div></div>
+  <div class="sp"></div>
+  <div class="grid g2">
+    <div class="card"><header><div><h3>What the team did</h3><p>Actions per section. Click one to see every action in it.</p></div></header>
+      <div class="hbars">${ALL_CATS.slice().sort((a,b)=>T[b]-T[a]).map(c=>`<button class="hb" data-go="activity:${c}"><span class="nm">${ico(c,18)}${CATS[c]}</span><span class="tr"><span class="fi" style="width:${(T[c]/catMax*100).toFixed(1)}%;background:${col(c)}"></span></span><span class="ct">${fmt(T[c])}</span></button>`).join('')}</div></div>
+    <div class="card"><header><div><h3>When the team works</h3><p>Actions by weekday and hour, in your time zone.</p></div></header><div id="hm"></div></div>
+  </div>
+  <div class="sp"></div>
+  <div class="grid g32">
+    <div class="card"><header><div><h3>People</h3><p>Who did what, split by section. Click a person for their full record.</p></div><button class="btn sm ghost" data-go="team">All people →</button></header>
+      <div id="pl">${people.map(p=>`<button class="prow" data-person="${p.id}"><span class="who"><span class="av sm ${p.active?'':'off'}">${esc(initials(p.name))}</span><span><b>${esc(p.name)}</b><small>${p.total?'last seen '+esc(ago(p.last_at)):'no activity in this period'}</small></span></span><span data-row="${p.id}">${catStack(p.cats,p.total)}</span><span class="num" style="text-align:right;color:var(--ink2)">${fmt(p.total)}</span></button>`).join('')||'<div class="empty">No people yet.</div>'}</div></div>
+    <div class="card"><header><div><h3>Busiest clients</h3><p>Actions per client.</p></div><button class="btn sm ghost" data-go="clients">All clients →</button></header>
+      <div class="hbars">${clients.map(c=>`<button class="hb" data-go="client:${esc(c.name)}" style="grid-template-columns:minmax(90px,150px) 1fr 44px"><span class="nm">${esc(c.name)}</span><span class="tr"><span class="fi" style="width:${(c.events/cmax*100).toFixed(1)}%;background:var(--ink)"></span></span><span class="ct">${fmt(c.events)}</span></button>`).join('')||'<div class="empty">No client activity in this period.</div>'}</div></div>
+  </div>
+  <div class="sp"></div>
+  <div class="grid g2">
+    <div class="card"><header><div><h3>Most downloaded</h3><p>Files downloaded, recoloured or exported most often.</p></div><button class="btn sm ghost" data-go="activity:download">All downloads →</button></header>
+      ${S.top_assets.length?`<div class="scroll"><table class="tbl"><thead><tr><th>File</th><th>Client</th><th class="n">Times</th></tr></thead><tbody>${S.top_assets.map(a=>`<tr><td><span style="display:flex;align-items:center;gap:8px"><i class="dot" style="background:${col(['svg_download','logo_variants','icon_created'].includes(a.action)?'customise':'download')}"></i>${esc(a.name)}</span></td><td class="mute">${esc(a.client||'–')}</td><td class="n">${fmt(a.n)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nothing downloaded in this period.</div>'}</div>
+    <div class="card"><header><div><h3>Latest activity</h3><p>The newest actions.</p></div><button class="btn sm ghost" data-go="activity:">Open the log →</button></header><div class="feed compact">${S.recent.map(e=>evRow(e,true)).join('')||'<div class="empty">Nothing recorded yet.</div>'}</div></div>
+  </div>
+  <div class="sp"></div>
+  <div class="card"><header><div><h3>Platform</h3><p>What LatchHub holds right now.</p></div></header>
+    <div class="stat-row">${[['Clients',fmt(pl.clients),pl.subbrands+' sub-brands'],['Logos',fmt(pl.logos),'all formats'],['Colours',fmt(pl.colors),'approved swatches'],['Fonts',fmt(pl.fonts),'typefaces'],['Brand elements',fmt(pl.elements),'icons & patterns'],['Brand books',fmt(pl.books),'PDF guidelines'],['Files in Zoho',fmt(sto.files),mb(sto.bytes)+' stored'],['Saved by compression',saved+'%',mb(Math.max(0,sto.orig_bytes-sto.bytes))+' smaller']].map(x=>`<div><b class="num">${x[1]}</b><span>${x[0]} · ${x[2]}</span></div>`).join('')}</div></div>
+  </div>`;
+  const draw=()=>{const el=$('#cA');if(!el)return;if(st.chartMode==='table')el.innerHTML=chartTable(S.daily);else stackedColumns(el,S.daily)};draw();heatmap($('#hm'),S.heat);
+  $$('[data-hide]',v).forEach(b=>b.onclick=()=>{const c=b.dataset.hide;st.hidden.has(c)?st.hidden.delete(c):st.hidden.add(c);b.classList.toggle('off');b.setAttribute('aria-pressed',!st.hidden.has(c));draw()});
+  $$('[data-cm]',v).forEach(b=>b.onclick=()=>{st.chartMode=b.dataset.cm;$$('[data-cm]',v).forEach(x=>x.classList.toggle('on',x===b));draw()});
+  stackTips($('#pl'));wire(v);onResize=draw}
+function chartTable(daily){const B=buckets(daily).slice().reverse();return`<div class="scroll" style="max-height:300px;overflow-y:auto"><table class="tbl"><thead><tr><th>${daily.length>45?'Week':'Day'}</th>${WORK.map(c=>`<th class="n">${CSHORT[c]}</th>`).join('')}<th class="n">Total</th></tr></thead><tbody>${B.map(b=>`<tr><td style="white-space:nowrap">${esc(b.long)}</td>${WORK.map(c=>`<td class="n">${b.c[c]?fmt(b.c[c]):'<span class="mute">·</span>'}</td>`).join('')}<td class="n"><b>${fmt(WORK.reduce((a,c)=>a+(b.c[c]||0),0))}</b></td></tr>`).join('')}</tbody></table></div>`}
+/* shared click routing: data-go="activity:<section>" | "client:<name>" | "team" …, data-person (open a person), data-fp / data-fc (filter the log) */
+function wire(root){
+  $$('[data-go]',root).forEach(b=>b.onclick=e=>{e.stopPropagation();const g=b.dataset.go,i=g.indexOf(':'),k=i<0?g:g.slice(0,i),val=i<0?null:g.slice(i+1);
+    if(k==='activity')go('activity',val!==null?{cat:val}:null);else if(k==='client')go('activity',{client:val});else go(k)});
+  $$('[data-person]',root).forEach(b=>b.onclick=e=>{e.stopPropagation();person(+b.dataset.person)});
+  $$('[data-fp]',root).forEach(b=>b.onclick=e=>{e.stopPropagation();go('activity',{user:b.dataset.fp})});
+  $$('[data-fc]',root).forEach(b=>b.onclick=e=>{e.stopPropagation();go('activity',{client:b.dataset.fc})})}
+let onResize=null,rT;addEventListener('resize',()=>{clearTimeout(rT);rT=setTimeout(()=>onResize&&onResize(),120)});
+
+/* ======================= activity ======================= */
+function evRow(e,compact){
+  const c=e.cat||'edit';
+  return`<div class="ev">${compact?'':`<span class="tm" title="${esc(dLocal(e.at))}">${esc(tLocal(e.at))}</span>`}${ico(c)}<div class="bd"><div class="ln">${+e.user_id>0?`<button class="p" data-fp="${+e.user_id}">${esc(e.user_name||'—')}</button>`:`<b>${esc(e.user_name||'Someone')}</b>`}<span>${esc(actLabel(e.action).replace(/^./,x=>x.toLowerCase()))}</span>${e.client_name?`<button class="cl" data-fc="${esc(e.client_name)}">${esc(e.client_name)}</button>`:''}</div>${e.details&&e.details!==e.client_name&&e.details!=='Signed in'?`<div class="dt">${esc(e.details)}</div>`:''}${compact?'':`<div class="sec" style="margin-top:3px"><span${c==='error'?' class="bad"':''}>${esc(CATS[c]||c)}</span>${e.role?' · '+esc(e.role):''}${e.ip?' · '+esc(e.ip):''}</div>`}</div>${compact?`<span class="tm" title="${esc(dLocal(e.at))}">${esc(ago(e.at))}</span>`:''}</div>`}
+function aq(extra){const a=st.act,p=new URLSearchParams();if(a.cat)p.set('cat',a.cat);if(a.user)p.set('user',a.user);if(a.client)p.set('client',a.client);if(a.q)p.set('q',a.q);if(a.from)p.set('from',a.from);if(a.to)p.set('to',a.to);for(const k in extra||{})p.set(k,extra[k]);return p.toString()}
+function viewActivity(v){
+  const S=st.stats,T=S.totals,a=st.act,all=ALL_CATS.reduce((x,c)=>x+T[c],0);
+  const who=a.cat?S.people.filter(p=>p.cats[a.cat]).sort((x,y)=>y.cats[a.cat]-x.cats[a.cat]).slice(0,6):[];
+  v.innerHTML=`<div class="fade"><div class="tabs" role="tablist" aria-label="Sections">${[['','All activity',all,'var(--ink)'],...ALL_CATS.map(c=>[c,CATS[c],T[c],col(c)])].map(t=>`<button role="tab" aria-selected="${a.cat===t[0]}" data-cat="${t[0]}" class="${a.cat===t[0]?'on':''}" style="--tc:${t[3]}">${t[0]?`<i class="dot" style="background:${t[3]}"></i>`:''}${t[1]} <span class="n">${fmt(t[2])}</span></button>`).join('')}</div>
+  <div class="filters"><select id="fu" aria-label="Person"><option value="">Everyone</option>${S.people.map(p=>`<option value="${p.id}" ${String(a.user)===String(p.id)?'selected':''}>${esc(p.name)}</option>`).join('')}</select>
+  <input id="fc" placeholder="Client" value="${esc(a.client)}" list="clist" aria-label="Client"><datalist id="clist">${S.clients.map(c=>`<option value="${esc(c.name)}">`).join('')}</datalist>
+  <input id="fq" class="grow" type="search" placeholder="Search files, colours, details…" value="${esc(a.q)}" aria-label="Search">
+  <input id="ff" type="date" value="${esc(a.from)}" aria-label="From" title="From"><input id="ft" type="date" value="${esc(a.to)}" aria-label="To" title="To">
+  <button class="btn ghost" id="fr">Reset</button><button class="btn" id="fx" title="Download what is shown as a spreadsheet">⬇ CSV</button></div>
+  ${a.cat?`<div class="card" style="margin-bottom:16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:14px 18px">${ico(a.cat,38)}<div style="flex:1;min-width:200px"><b style="font-size:15px">${CATS[a.cat]}</b><div class="mute" style="font-size:12.5px">${fmt(T[a.cat])} in the last ${perLabel()} · ${delta(T[a.cat],S.prev[a.cat])}</div></div>${who.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="cap" style="margin-right:4px">Most by</span>${who.map(p=>`<button class="btn sm ghost" data-fp="${p.id}">${esc(p.name)} · ${fmt(p.cats[a.cat])}</button>`).join('')}</div>`:''}</div>`:''}
+  <div class="card"><div id="feed"></div><div class="more"><button class="btn" id="fm" hidden>Load more</button></div></div></div>`;
+  let tq;const apply=()=>{a.user=$('#fu').value;a.client=$('#fc').value.trim();a.q=$('#fq').value.trim();a.from=$('#ff').value;a.to=$('#ft').value;feed(true)};
+  $$('[data-cat]',v).forEach(b=>b.onclick=()=>{a.cat=b.dataset.cat;a.fresh=true;viewActivity(v)});
+  ['fu','ff','ft'].forEach(i=>$('#'+i).onchange=apply);['fc','fq'].forEach(i=>$('#'+i).oninput=()=>{clearTimeout(tq);tq=setTimeout(apply,350)});
+  $('#fr').onclick=()=>{Object.assign(a,{cat:'',user:'',client:'',q:'',from:'',to:'',fresh:true});viewActivity(v)};
+  $('#fx').onclick=()=>{location.href='api/activity.php?'+aq({format:'csv'})};
+  $('#fm').onclick=()=>feed(false);wire(v);onResize=null;
+  if(a.fresh){a.fresh=false;feed(true)}else drawFeed()}
+async function feed(reset){
+  const a=st.act,f=$('#feed');if(!f)return;if(reset){a.rows=[];a.before=null;a.done=false;f.innerHTML='<div class="skel"></div>'.repeat(5)}
+  const q=aq(Object.assign({limit:60},a.before?{before:a.before}:{}));a._q=q;
+  try{const j=await api('activity.php?'+q);if(a._q!==q)return;a.rows=a.rows.concat(j.events);a.before=j.next;a.done=!j.next;drawFeed()}
+  catch(e){f.innerHTML=`<div class="empty bad">${esc(e.message)}</div>`}}
+function drawFeed(){
+  const a=st.act,f=$('#feed');if(!f)return;
+  if(!a.rows.length){f.innerHTML='<div class="empty">Nothing matches – try another section, person or date.</div>';$('#fm').hidden=true;return}
+  const today=dayKey(new Date()),yest=dayKey(new Date(Date.now()-864e5)),counts={};let html='',cur='';
+  a.rows.forEach(e=>{const d=utc(e.at),k=d?dayKey(d):'';counts[k]=(counts[k]||0)+1});
+  a.rows.forEach(e=>{const d=utc(e.at),k=d?dayKey(d):'';if(k!==cur){cur=k;html+=`<div class="day"><span>${k===today?'Today':k===yest?'Yesterday':d.toLocaleDateString([],{weekday:'long',day:'numeric',month:'long',year:d.getFullYear()===new Date().getFullYear()?undefined:'numeric'})}</span><span>${counts[k]} action${counts[k]===1?'':'s'}${a.done?'':' shown'}</span></div>`}html+=evRow(e)});
+  f.innerHTML=html;$('#fm').hidden=a.done;wire(f)}
+
+/* ======================= team ======================= */
+function viewTeam(v){
+  const S=st.stats,ppl=S.people.slice().sort((a,b)=>(b.role==='admin')-(a.role==='admin')||b.active-a.active||b.total-a.total),act=S.people.filter(p=>p.active).length;
+  v.innerHTML=`<div class="fade"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap"><span class="mute">${act} of 11 places in use (one admin plus ten designers) · numbers are for the last ${perLabel()}</span><button class="btn pri" id="add">＋ Add a person</button></div>
+  <div class="people">${ppl.map(p=>{const top=WORK.filter(c=>p.cats[c]).sort((a,b)=>p.cats[b]-p.cats[a])[0];return`<div class="pc">
+    <div class="h"><span class="av ${p.active?'':'off'}">${esc(initials(p.name))}</span><span class="who"><span><b>${esc(p.name)}</b><small>${esc(p.email)}</small></span></span><span class="pill ${p.role==='admin'?'adm':''}">${esc(p.role)}</span>${p.active?'':'<span class="pill off">Off</span>'}</div>
+    <div class="stats"><div><b class="num">${fmt(p.total)}</b><span>actions</span></div><div><b class="num">${fmt(p.days_active)}</b><span>days active</span></div><div><b style="font-size:14px;line-height:1.9;white-space:nowrap">${esc(ago(p.last_at))}</b><span>last seen</span></div></div>
+    <div><div class="cap" style="margin-bottom:6px;display:flex;justify-content:space-between;gap:8px"><span>By section</span><span>${top?'Mostly '+esc(CATS[top].toLowerCase()):''}</span></div><span data-row="${p.id}">${catStack(p.cats,p.total)}</span></div>
+    ${sparkline(p.series,'var(--ink)','spark')}
+    ${p.top_clients.length?`<div class="mute" style="font-size:12px">Works most on ${p.top_clients.map(c=>`<b style="color:var(--ink2);font-weight:600">${esc(c.name)}</b>`).join(', ')}</div>`:''}
+    <div class="acts"><button class="btn sm pri" data-person="${p.id}">Full record</button><button class="btn sm ghost" data-ren="${p.id}">Rename</button><button class="btn sm ghost" data-pw="${p.id}">New password</button>${p.id!==me.id?`<button class="btn sm ghost" data-act="${p.id}" data-on="${p.active?0:1}">${p.active?'Switch off':'Switch on'}</button>`:''}</div></div>`}).join('')}</div></div>`;
+  $('#add').onclick=addPerson;wire(v);teamButtons(v);stackTips(v);onResize=null}
+function teamButtons(root){
+  const P=id=>st.stats.people.find(x=>x.id==id);
+  $$('[data-ren]',root).forEach(b=>b.onclick=()=>{const p=P(b.dataset.ren);dialog({title:'Rename '+p.name,text:'The name everyone sees in LatchHub and in the activity log. The sign-in email stays the same.',fields:[['name','Name','text',p.name]],ok:'Save',run:async f=>{await api('users.php',{action:'rename',id:p.id,name:f.name});toast('Renamed to '+f.name);closeDrawer();load()}})});
+  $$('[data-pw]',root).forEach(b=>b.onclick=()=>{const p=P(b.dataset.pw);dialog({title:'New password for '+p.name,text:'Tell them the new password yourself. They can change it later in Settings → Change password.',fields:[['password','New password (10+ characters)','password','']],ok:'Set password',run:async f=>{await api('users.php',{action:'password',id:p.id,password:f.password});toast('Password changed for '+p.name)}})});
+  $$('[data-act]',root).forEach(b=>b.onclick=async()=>{const p=P(b.dataset.act),on=+b.dataset.on;if(!on&&!confirm('Switch off '+p.name+'? Their next action is refused and they cannot sign in until you switch them back on.'))return;try{await api('users.php',{action:'active',id:p.id,active:on});toast(p.name+(on?' switched on':' switched off'));load()}catch(e){toast(e.message,6000)}})}
+function addPerson(){dialog({title:'Add a person',text:'They sign in with this email and password. Share the password with them; they can change it themselves in Settings.',fields:[['name','Name','text',''],['email','Email','email',''],['role','Role','select','designer'],['password','Password (10+ characters)','password','']],ok:'Add person',run:async f=>{await api('users.php',{action:'create',name:f.name,email:f.email,role:f.role,password:f.password});toast(f.name+' added');load()}})}
+function dialog(o){
+  const veil=document.createElement('div');veil.className='veil';veil.style.zIndex=105;const d=document.createElement('form');d.className='dlg';d.setAttribute('role','dialog');d.setAttribute('aria-modal','true');d.setAttribute('aria-label',o.title);
+  d.innerHTML=`<h3>${esc(o.title)}</h3>${o.text?`<p>${esc(o.text)}</p>`:''}${o.fields.map(([k,l,t,val])=>`<label for="dl-${k}">${esc(l)}</label>${t==='select'?`<select id="dl-${k}" name="${k}"><option value="designer">Designer</option><option value="admin">Admin</option></select>`:`<input id="dl-${k}" name="${k}" type="${t}" value="${esc(val)}" required ${t==='password'?'minlength="10" autocomplete="new-password"':''} ${k==='name'?'maxlength="60"':''}>`}`).join('')}<div class="msg" role="alert"></div><div class="row"><button type="button" class="btn ghost" data-x>Cancel</button><button class="btn pri">${esc(o.ok)}</button></div>`;
+  document.body.append(veil,d);requestAnimationFrame(()=>{veil.classList.add('on');d.classList.add('on')});const first=d.querySelector('input,select');if(first){first.focus();if(first.type==='text')first.select()}
+  const close=()=>{veil.classList.remove('on');d.classList.remove('on');setTimeout(()=>{veil.remove();d.remove()},200)};
+  veil.onclick=close;d.querySelector('[data-x]').onclick=close;d.addEventListener('keydown',e=>{if(e.key==='Escape'){e.stopPropagation();close()}});
+  d.onsubmit=async e=>{e.preventDefault();const f={};o.fields.forEach(([k])=>f[k]=d.elements[k].value.trim());const b=d.querySelector('.btn.pri');b.disabled=true;try{await o.run(f);close()}catch(err){d.querySelector('.msg').textContent=err.message;b.disabled=false}}}
+let closeDrawer=()=>{};
+async function person(id){
+  const p=st.stats.people.find(x=>x.id===id);if(!p)return;closeDrawer();
+  const veil=document.createElement('div');veil.className='veil';const d=document.createElement('aside');d.className='drawer';d.setAttribute('role','dialog');d.setAttribute('aria-label',p.name);
+  const cmax=Math.max(1,...ALL_CATS.map(c=>p.cats[c]));
+  d.innerHTML=`<div class="dh"><span class="av lg ${p.active?'':'off'}">${esc(initials(p.name))}</span><div class="who"><span><b style="font-size:18px">${esc(p.name)}</b><small>${esc(p.email)} · ${esc(p.role)}${p.active?'':' · switched off'}</small></span></div><button class="x" aria-label="Close">×</button></div>
+  <div class="db"><div class="stat-row" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div><b class="num">${fmt(p.total)}</b><span>actions · ${perLabel()}</span></div><div><b class="num">${fmt(p.days_active)}</b><span>days active</span></div><div><b style="font-size:16px;line-height:1.8;white-space:nowrap">${esc(ago(p.last_at))}</b><span>last seen</span></div></div>
+  <div class="sp"></div><div class="card"><header><div><h3>Every day</h3><p>Actions per day, last ${perLabel()}.</p></div></header>${sparkline(p.series,'var(--ink)','spark')}</div>
+  <div class="sp"></div><div class="card"><header><div><h3>By section</h3><p>Click a section to see these actions in the log.</p></div></header><div class="hbars">${ALL_CATS.filter(c=>p.cats[c]).sort((a,b)=>p.cats[b]-p.cats[a]).map(c=>`<button class="hb" data-pc="${c}"><span class="nm"><i class="dot" style="background:${col(c)}"></i>${CATS[c]}</span><span class="tr"><span class="fi" style="width:${(p.cats[c]/cmax*100).toFixed(1)}%;background:${col(c)}"></span></span><span class="ct">${fmt(p.cats[c])}</span></button>`).join('')||'<div class="empty">No activity in this period.</div>'}</div></div>
+  <div class="sp"></div><div class="card"><header><div><h3>Latest actions</h3></div><button class="btn sm ghost" data-all>Open in the log →</button></header><div class="feed compact" id="pf"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div></div>
+  <div class="sp"></div><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm ghost" data-ren="${p.id}">Rename</button><button class="btn sm ghost" data-pw="${p.id}">New password</button></div></div>`;
+  document.body.append(veil,d);requestAnimationFrame(()=>{veil.classList.add('on');d.classList.add('on')});
+  const esck=e=>{if(e.key==='Escape')closeDrawer()};
+  closeDrawer=()=>{veil.classList.remove('on');d.classList.remove('on');setTimeout(()=>{veil.remove();d.remove()},280);document.removeEventListener('keydown',esck);closeDrawer=()=>{}};
+  document.addEventListener('keydown',esck);veil.onclick=()=>closeDrawer();$('.x',d).onclick=()=>closeDrawer();$('.x',d).focus();
+  $('[data-all]',d).onclick=()=>{closeDrawer();go('activity',{user:String(p.id)})};
+  $$('[data-pc]',d).forEach(b=>b.onclick=()=>{closeDrawer();go('activity',{user:String(p.id),cat:b.dataset.pc})});
+  teamButtons(d);
+  try{const j=await api('activity.php?user='+p.id+'&limit=25'),pf=$('#pf',d);pf.innerHTML=j.events.map(e=>evRow(e,true)).join('')||'<div class="empty">Nothing recorded yet.</div>';
+    $$('[data-fp]',pf).forEach(b=>b.onclick=()=>{closeDrawer();go('activity',{user:b.dataset.fp})});$$('[data-fc]',pf).forEach(b=>b.onclick=()=>{closeDrawer();go('activity',{client:b.dataset.fc})})}
+  catch(e){$('#pf',d).innerHTML=`<div class="empty bad">${esc(e.message)}</div>`}}
+
+/* ======================= clients ======================= */
+function viewClients(v){
+  const S=st.stats,k=st.sort.k,dir=st.sort.d,byId={};S.clients.forEach(c=>byId[c.id]=c);
+  const val=c=>k==='name'?c.name.toLowerCase():k==='updated_at'?String(c.updated_at||''):c[k];
+  const top=S.clients.filter(c=>!c.parent||!byId[c.parent]).sort((a,b)=>(val(a)>val(b)?1:val(a)<val(b)?-1:0)*dir);
+  const rows=[];top.forEach(c=>{rows.push(c);S.clients.filter(x=>x.parent===c.id).forEach(x=>rows.push(x))});
+  const th=(key,l,n)=>`<th class="sort ${n?'n':''}" data-sort="${key}" aria-sort="${k===key?(dir>0?'ascending':'descending'):'none'}">${l}${k===key?(dir>0?' ↑':' ↓'):''}</th>`;
+  const tot=S.clients.reduce((a,c)=>a+c.events,0);
+  v.innerHTML=`<div class="fade"><div class="stat-row" style="margin-bottom:16px">${[['Clients',S.platform.clients,S.platform.subbrands+' sub-brands'],['Actions on clients',tot,'last '+perLabel()],['Files in Zoho',S.storage.files,mb(S.storage.bytes)],['Deleted, restorable',S.platform.deleted_clients,'see Zoho & system']].map(x=>`<div><b class="num">${fmt(x[1])}</b><span>${x[0]} · ${x[2]}</span></div>`).join('')}</div>
+  <div class="card scroll"><table class="tbl"><thead><tr>${th('name','Client')}<th>Colours</th>${th('logos','Logos',1)}${th('fonts','Fonts',1)}${th('elements','Elements',1)}<th class="n">Book</th>${th('files','In Zoho',1)}${th('views','Views',1)}${th('downloads','Downloads',1)}${th('changes','Changes',1)}${th('updated_at','Last change')}</tr></thead>
+  <tbody>${rows.map(c=>`<tr class="click" data-fc="${esc(c.name)}" title="See all activity for ${esc(c.name)}"><td><span class="cname ${c.parent&&byId[c.parent]?'sub':''}"><b style="font-weight:600">${esc(c.name)}</b></span></td><td><span class="sw">${c.swatch.filter(h=>/^#[0-9a-f]{3,8}$/i.test(h)).map(h=>`<i style="background:${h}" title="${esc(h)}"></i>`).join('')||'<span class="mute">–</span>'}</span></td><td class="n">${fmt(c.logos)}</td><td class="n">${fmt(c.fonts)}</td><td class="n">${fmt(c.elements)}</td><td class="n">${c.book?'✓':'<span class="mute">–</span>'}</td><td class="n" style="white-space:nowrap">${c.files?fmt(c.files)+' <span class="mute">· '+mb(c.bytes)+'</span>':'<span class="mute">–</span>'}</td><td class="n">${fmt(c.views)}</td><td class="n">${fmt(c.downloads)}</td><td class="n">${fmt(c.changes)}</td><td><span style="white-space:nowrap">${c.updated_at?esc(ago(String(c.updated_at))):'–'}</span>${c.updated_by?`<br><span class="mute" style="font-size:11.5px">by ${esc(c.updated_by)}</span>`:''}</td></tr>`).join('')||'<tr><td colspan="11" class="empty">No clients on the server yet.</td></tr>'}</tbody></table></div></div>`;
+  $$('[data-sort]',v).forEach(h=>h.onclick=()=>{const kk=h.dataset.sort;st.sort=st.sort.k===kk?{k:kk,d:-st.sort.d}:{k:kk,d:kk==='name'?1:-1};viewClients(v)});
+  wire(v);onResize=null}
+
+/* ======================= system ======================= */
+function viewSystem(v){
+  const sto=st.stats.storage,M={none:'As uploaded (logos, fonts, sources)',image:'Image compressed','pdf-ghostscript':'PDF compressed (Ghostscript)'};
+  v.innerHTML=`<div class="fade"><div class="grid g2">
+   <div class="card"><header><div><h3>Zoho connection</h3><p>Checks the database, the Zoho sign-in, the LatchHub folder and what this server can compress.</p></div><button class="btn pri" id="hc">Run health check</button></header><div id="hr" class="mute">Not checked yet.</div></div>
+   <div class="card"><header><div><h3>Upload test</h3><p>Really creates a small file in Zoho, reads it back and compares.</p></div><button class="btn" id="stt">Run upload test</button></header><div id="sr" class="mute">Not run yet.</div></div></div>
+  <div class="sp"></div>
+  <div class="card"><header><div><h3>Storage in Zoho</h3><p>Files LatchHub uploaded, and how much compression saved.</p></div></header>
+   <div class="stat-row" style="margin-bottom:14px">${[['Files',fmt(sto.files)],['Stored',mb(sto.bytes)],['Before compression',mb(sto.orig_bytes)],['Saved',sto.orig_bytes?Math.max(0,Math.round((1-sto.bytes/sto.orig_bytes)*100))+'%':'–']].map(x=>`<div><b class="num">${x[1]}</b><span>${x[0]}</span></div>`).join('')}</div>
+   ${sto.by_method.length?`<div class="scroll"><table class="tbl"><thead><tr><th>How it was stored</th><th class="n">Files</th><th class="n">Stored</th><th class="n">Original</th></tr></thead><tbody>${sto.by_method.map(m=>`<tr><td>${esc(M[m.method]||m.method)}</td><td class="n">${fmt(m.files)}</td><td class="n">${mb(m.bytes)}</td><td class="n">${mb(m.orig_bytes)}</td></tr>`).join('')}</tbody></table></div>`:''}</div>
+  <div class="sp"></div>
+  <div class="grid g2">
+   <div class="card"><header><div><h3>Zoho clean-up queue</h3><p>Files or folders LatchHub tried to move to the WorkDrive trash but Zoho did not accept yet. Empty means everything was cleaned up.</p></div><button class="btn ghost" id="pr">Retry now</button></header><div id="pq"><div class="skel"></div></div></div>
+   <div class="card"><header><div><h3>Deleted clients</h3><p>Restore brings back the client and its Zoho folder, while WorkDrive still keeps it in the trash.</p></div></header><div id="dc"><div class="skel"></div></div></div></div></div>`;
+  $('#hc').onclick=health;$('#stt').onclick=selftest;
+  $('#pr').onclick=async()=>{try{const r=await api('brands.php',{action:'retry_pending'});toast(r.done+' moved to the trash, '+r.failed+' still refused');pending()}catch(e){toast(e.message,6000)}};
+  pending();deleted();onResize=null}
+const checkTable=(rows,k)=>`<table class="tbl checks">${rows.map(c=>`<tr><td class="${c.ok?'ok':'bad'}">${c.ok?'✓':'✕'}</td><td>${esc(c[k])}${c.note?`<br><span class="mute" style="font-size:11.5px">${esc(c.note)}</span>`:''}</td></tr>`).join('')}</table>`;
+async function health(){const r=$('#hr');r.innerHTML='<div class="skel"></div><div class="skel"></div>';try{const j=await api('health.php');r.innerHTML=`<p class="${j.all_ok?'ok':'bad'}" style="font-weight:600;margin-bottom:8px">${j.all_ok?'✓ Everything required is working.':'✕ Something needs attention.'} <span class="mute" style="font-weight:400">PHP ${esc(j.php)}</span></p>`+checkTable(j.checks,'check')}catch(e){r.innerHTML=`<span class="bad">${esc(e.message)}</span>`}}
+async function selftest(){const r=$('#sr');r.innerHTML='<span class="mute">Creating a folder, uploading, downloading…</span>';try{const j=await api('selftest.php',{});r.innerHTML=`<p class="${j.all_ok?'ok':'bad'}" style="font-weight:600;margin-bottom:8px">${j.all_ok?'✓ Uploading and downloading work.':'✕ A step failed – details below.'}</p>`+checkTable(j.steps,'step')}catch(e){r.innerHTML=`<span class="bad">${esc(e.message)}</span>`}}
+async function pending(){const el=$('#pq');if(!el)return;try{const j=await api('brands.php?pending=1');el.innerHTML=j.pending.length?`<table class="tbl">${j.pending.map(p=>`<tr><td><b>${esc(p.kind)}</b> <span class="mute">${esc(p.zoho_id)}</span><br><span class="mute" style="font-size:11.5px">${esc(dLocal(p.created_at))} · tried ${+p.tries} time(s)</span></td><td class="bad" style="font-size:12px">${esc(p.reason)}</td></tr>`).join('')}</table>`:'<span class="ok">✓ Nothing waiting.</span>'}catch(e){el.innerHTML=`<span class="bad">${esc(e.message)}</span>`}}
+async function deleted(){const el=$('#dc');if(!el)return;try{const j=await api('brands.php?deleted=1');el.innerHTML=j.deleted.length?`<table class="tbl">${j.deleted.map(d=>`<tr><td><b>${esc(d.name)}</b><br><span class="mute" style="font-size:11.5px">deleted ${esc(dLocal(d.deleted_at))}${d.by_name?' by '+esc(d.by_name):''}</span></td><td class="n"><button class="btn sm" data-rs="${esc(d.id)}">Restore</button></td></tr>`).join('')}</table>`:'<span class="mute">None.</span>';
+  $$('[data-rs]',el).forEach(b=>b.onclick=async()=>{if(!confirm('Restore this client and its Zoho folder?'))return;b.disabled=true;try{await api('brands.php',{action:'restore',id:b.dataset.rs});toast('Restored – designers will see it again within a minute');load()}catch(e){toast(e.message,7000);b.disabled=false}})}catch(e){el.innerHTML=`<span class="bad">${esc(e.message)}</span>`}}
+
+/* keep the overview fresh while it is open */
+setInterval(()=>{if(me&&me.role==='admin'&&!document.hidden&&st.view==='overview'&&!document.querySelector('.dlg,.drawer'))load()},120000);
 boot();
 </script></body></html>

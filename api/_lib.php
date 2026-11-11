@@ -402,21 +402,73 @@ function log_activity(string $action, ?array $user = null, array $o = []): void 
     if (mt_rand(1, 300) === 1) db()->prepare('DELETE FROM lh_activity WHERE at < ?')->execute([gmdate('Y-m-d H:i:s', time() - 400 * 86400)]);   /* keep about 13 months */
   } catch (Throwable $e) { error_log('LatchHub activity: ' . $e->getMessage()); }
 }
-/* what changed between two versions of a client record, in plain words */
-function brand_diff(array $o, array $n): string {
-  $p = [];
-  if ((string)($o['name'] ?? '') !== (string)($n['name'] ?? '')) $p[] = 'renamed "' . ($o['name'] ?? '') . '" → "' . ($n['name'] ?? '') . '"';
+/* ---------- activity categories: every action belongs to one section of the admin dashboard ---------- */
+const LH_CATS = ['add' => 'Added', 'edit' => 'Edited', 'delete' => 'Deleted', 'download' => 'Downloaded & copied', 'customise' => 'Customised', 'view' => 'Viewed', 'check' => 'Design checks', 'auth' => 'Sign-ins & account', 'admin' => 'Admin & team', 'error' => 'Problems'];
+function act_cat(string $a): string {
+  static $fixed = ['client_created' => 'add', 'file_uploaded' => 'add', 'smart_import' => 'add', 'client_updated' => 'edit', 'client_deleted' => 'delete', 'files_trashed' => 'delete',
+    'svg_download' => 'customise', 'logo_variants' => 'customise', 'icon_created' => 'customise', 'value_copied' => 'download', 'lens_check' => 'check',
+    'client_opened' => 'view', 'section_viewed' => 'view', 'link_opened' => 'view', 'client_error' => 'error', 'login_failed' => 'error', 'login_blocked' => 'error', 'password_change_failed' => 'error',
+    'login' => 'auth', 'logout' => 'auth', 'password_changed' => 'auth', 'name_changed' => 'auth',
+    'client_restored' => 'admin', 'cleanup_retry' => 'admin', 'selftest' => 'admin', 'password_reset' => 'admin', 'backup_restored' => 'admin', 'backup_download' => 'admin'];
+  if (isset($fixed[$a])) return $fixed[$a];
+  if (strpos($a, 'user_') === 0) return 'admin';
+  if (preg_match('/_added$/', $a)) return 'add';
+  if (preg_match('/_(removed|deleted)$/', $a)) return 'delete';
+  if (preg_match('/_(renamed|edited|replaced|moved)$/', $a)) return 'edit';
+  if (preg_match('/_(download|downloaded|copied)$/', $a)) return 'download';
+  return 'edit';
+}
+/* every single change between two versions of a client record: a list of [action, details], one per item */
+function brand_changes(array $o, array $n): array {
+  $c = [];
   $label = function ($x) { return is_array($x) ? (string)($x['name'] ?? $x['title'] ?? $x['id'] ?? '?') : '?'; };
   $byId = function ($arr) { $m = []; foreach (is_array($arr) ? $arr : [] as $x) { if (is_array($x) && isset($x['id'])) $m[(string)$x['id']] = $x; } return $m; };
+  if ((string)($o['name'] ?? '') !== (string)($n['name'] ?? '')) $c[] = ['client_renamed', '"' . ($o['name'] ?? '') . '" → "' . ($n['name'] ?? '') . '"'];
+  $extra = [
+    'logos' => fn($x) => trim(($x['group'] ?? '') . (!empty($x['formats']) ? ' · ' . implode('/', array_map(fn($f) => (string)($f['label'] ?? ''), array_slice((array)$x['formats'], 0, 6))) : '')),
+    'elements' => fn($x) => (string)($x['type'] ?? ''),
+    'fonts' => fn($x) => trim(($x['role'] ?? '') . (!empty($x['weights']) ? ' · ' . $x['weights'] : '')),
+    'colors' => fn($x) => trim(($x['hex'] ?? '') . (!empty($x['role']) ? ' · ' . $x['role'] : '')),
+    'links' => fn($x) => (string)($x['url'] ?? ''),
+  ];
   foreach (['logos' => 'logo', 'elements' => 'element', 'fonts' => 'font', 'colors' => 'colour', 'links' => 'link'] as $k => $w) {
     $a = $byId($o[$k] ?? []); $b = $byId($n[$k] ?? []);
-    $add = array_diff_key($b, $a); $rem = array_diff_key($a, $b);
-    if ($add) $p[] = '+' . count($add) . ' ' . $w . (count($add) > 1 ? 's' : '') . ' (' . implode(', ', array_slice(array_map($label, $add), 0, 3)) . (count($add) > 3 ? ', …' : '') . ')';
-    if ($rem) $p[] = '−' . count($rem) . ' ' . $w . (count($rem) > 1 ? 's' : '') . ' (' . implode(', ', array_slice(array_map($label, $rem), 0, 3)) . (count($rem) > 3 ? ', …' : '') . ')';
-    if ($k === 'colors') foreach (array_intersect_key($b, $a) as $id => $c) { if (strtolower((string)($c['hex'] ?? '')) !== strtolower((string)($a[$id]['hex'] ?? ''))) $p[] = 'colour "' . $label($c) . '" ' . ($a[$id]['hex'] ?? '?') . ' → ' . ($c['hex'] ?? '?'); }
+    foreach (['_added' => array_diff_key($b, $a), '_removed' => array_diff_key($a, $b)] as $suf => $set) {
+      $i = 0;
+      foreach ($set as $x) {
+        if (++$i > 25) { $c[] = [$w . $suf, '… and ' . (count($set) - 25) . ' more']; break; }
+        $e = $extra[$k]($x); $c[] = [$w . $suf, $label($x) . ($e !== '' ? ' (' . $e . ')' : '')];
+      }
+    }
+    foreach (array_intersect_key($b, $a) as $id => $x) {
+      $y = $a[$id];
+      if ($label($x) !== $label($y)) $c[] = [$w . '_renamed', '"' . $label($y) . '" → "' . $label($x) . '"'];
+      $d = [];
+      if ($k === 'colors') { if (strtolower((string)($x['hex'] ?? '')) !== strtolower((string)($y['hex'] ?? ''))) $d[] = ($y['hex'] ?? '?') . ' → ' . ($x['hex'] ?? '?'); if ((string)($x['role'] ?? '') !== (string)($y['role'] ?? '')) $d[] = 'role ' . ($y['role'] ?? '') . ' → ' . ($x['role'] ?? ''); }
+      if ($k === 'fonts') foreach (['role', 'weights', 'url'] as $f) { if ((string)($x[$f] ?? '') !== (string)($y[$f] ?? '')) $d[] = $f . ' changed'; }
+      if ($k === 'fonts' && empty($y['file']) !== empty($x['file'])) $d[] = empty($x['file']) ? 'font file removed' : 'font file added';
+      if ($k === 'links' && (string)($x['url'] ?? '') !== (string)($y['url'] ?? '')) $d[] = 'address changed';
+      if (in_array($k, ['logos', 'elements'], true) && json_encode($x['formats'] ?? null) !== json_encode($y['formats'] ?? null)) $d[] = 'files updated';
+      if ($k === 'logos' && (string)($x['group'] ?? '') !== (string)($y['group'] ?? '')) $d[] = 'moved to ' . ($x['group'] ?? '');
+      if ($d) $c[] = [$w . '_edited', $label($x) . ': ' . implode(', ', $d)];
+    }
   }
-  $ob = $o['book']['url'] ?? ($o['book'] ? 'x' : ''); $nb = $n['book']['url'] ?? ($n['book'] ? 'x' : '');
-  if (!$ob && $nb) $p[] = 'brand book added'; elseif ($ob && !$nb) $p[] = 'brand book removed'; elseif ($ob && $nb && $ob !== $nb) $p[] = 'brand book replaced';
-  if (json_encode($o['rules'] ?? null) !== json_encode($n['rules'] ?? null) || (string)($o['notes'] ?? '') !== (string)($n['notes'] ?? '')) $p[] = 'rules / description edited';
-  return implode('; ', $p);
+  $ob = $o['book']['url'] ?? (!empty($o['book']) ? 'x' : ''); $nb = $n['book']['url'] ?? (!empty($n['book']) ? 'x' : '');
+  $bt = (string)($n['book']['title'] ?? ($o['book']['title'] ?? 'Brand book'));
+  if (!$ob && $nb) $c[] = ['brand_book_added', $bt]; elseif ($ob && !$nb) $c[] = ['brand_book_removed', $bt]; elseif ($ob && $nb && $ob !== $nb) $c[] = ['brand_book_replaced', $bt];
+  $or = is_array($o['rules'] ?? null) ? $o['rules'] : []; $nr = is_array($n['rules'] ?? null) ? $n['rules'] : [];
+  $rk = array_values(array_filter(array_unique(array_merge(array_keys($or), array_keys($nr))), fn($k) => json_encode($or[$k] ?? null) !== json_encode($nr[$k] ?? null)));
+  if ($rk) $c[] = ['rules_edited', 'Changed: ' . implode(', ', array_map(fn($k) => ['tol' => 'colour tolerance', 'minLogo' => 'minimum logo size', 'requireLogo' => 'logo required', 'neutrals' => 'neutrals allowed', 'forbidden' => 'forbidden colours', 'notes' => 'written rules'][$k] ?? (string)$k, $rk))];
+  if ((string)($o['notes'] ?? '') !== (string)($n['notes'] ?? '')) $c[] = ['description_edited', (function_exists('mb_substr') ? mb_substr((string)($n['notes'] ?? ''), 0, 160) : substr((string)($n['notes'] ?? ''), 0, 160))];
+  if ((string)($o['parent'] ?? '') !== (string)($n['parent'] ?? '')) $c[] = ['client_moved', !empty($n['parent']) ? 'made a sub-brand' : 'no longer a sub-brand'];
+  if (json_encode($o['iconTheme'] ?? null) !== json_encode($n['iconTheme'] ?? null)) $c[] = ['icon_style_edited', 'Icon style changed'];
+  return $c;
+}
+/* the same changes in one line (kept for anything that wants a short summary) */
+function brand_diff(array $o, array $n): string { return implode('; ', array_map(fn($x) => str_replace('_', ' ', $x[0]) . ': ' . $x[1], brand_changes($o, $n))); }
+/* a person's display name: trimmed, single spaces, no control characters, at most 60 characters ('' = not acceptable) */
+function clean_person_name(string $n): string {
+  $n = trim((string)preg_replace('/\s+/u', ' ', (string)preg_replace('/[\x00-\x1F\x7F<>]+/u', '', $n)));
+  $len = function_exists('mb_strlen') ? mb_strlen($n) : strlen($n);
+  return ($len < 1 || $len > 60) ? '' : $n;
 }

@@ -137,4 +137,18 @@ const LHsync={
     }catch{}}
 };
 /* Activity log: tell the server about things only the browser sees. Best effort – never blocks or breaks the screen. */
-window.LHtrack=function(action,brand,details){try{if(!window.LHsync||!LHsync.on)return;let b=brand;if(!b&&typeof S!=='undefined'&&typeof ui!=='undefined')b=S.brands.find(x=>x.id===ui.brandId);fetch('api/activity.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-LH-CSRF':LHsync.csrf},body:JSON.stringify({action,client_id:b?b.id:'',client_name:b?b.name:'',details:String(details||'').slice(0,600)})}).catch(()=>{})}catch{}};
+window.LHtrack=function(action,brand,details){try{if(typeof LHsync==='undefined'||!LHsync.on)return;let b=brand;if(!b&&typeof S!=='undefined'&&typeof ui!=='undefined')b=S.brands.find(x=>x.id===ui.brandId);fetch('api/activity.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-LH-CSRF':LHsync.csrf},body:JSON.stringify({action,client_id:b?b.id:'',client_name:b?b.name:'',details:String(details||'').slice(0,600)})}).catch(()=>{})}catch{}};
+/* Every download, opened link and copied value is recorded for the admin's activity log: which file, of which client, in which section. */
+(function(){
+  const SEC={'s-logos':'logo_download','s-elements':'element_download','s-fonts':'font_download','s-book':'brand_book_download','s-colors':'swatch_download','s-svg':'logo_download'};
+  const labelOf=el=>{let n=el.parentElement;for(let i=0;i<5&&n;i++,n=n.parentElement){const b=n.querySelector(':scope > b, :scope > .lc > b, :scope b');if(b&&b.textContent.trim())return b.textContent.trim()}return''};
+  document.addEventListener('click',e=>{
+    const a=e.target.closest&&e.target.closest('a[href]');if(!a||!window.LHtrack)return;
+    const sec=a.closest('section'),sid=sec?sec.id:'',href=a.getAttribute('href')||'',file=a.getAttribute('download')||'',txt=a.textContent.trim().replace(/\s+/g,' ').slice(0,60);
+    if(sid==='s-links'||(!file&&a.target==='_blank'&&sid!=='s-book'&&sid!=='s-fonts')){let host='';try{host=new URL(href,location.href).host}catch{}LHtrack('link_opened',null,(txt||'link')+(host?' · '+host:''));return}
+    if(sid==='s-fonts'&&!file){LHtrack('font_download',null,(labelOf(a)||'font')+' · '+txt);return}
+    if(sid==='s-book'&&!file){LHtrack('brand_book_download',null,(labelOf(a)||'Brand book')+' (opened)');return}
+    if(!file&&!/download\.php|^assets\/|^data:|^blob:/.test(href))return;
+    const what=labelOf(a),fmt=txt&&txt!==file?' · '+txt:'';
+    LHtrack(SEC[sid]||'asset_download',null,(file||txt||'file')+(what&&!(file||'').includes(what)?' – '+what:'')+fmt)},true);
+})();

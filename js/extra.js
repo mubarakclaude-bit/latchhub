@@ -68,4 +68,4 @@ async function addIcon(b,name,svgDark,th){
   (b.elements=b.elements||[]).push({id:uid(),type:'icon',name,user:true,preview:pt,bg:th.bg,formats:[
     {label:'SVG',url:IconGen.dataSvg(svgDark),filename:base+'.svg'},{label:'PNG',url:pd,filename:base+'.png'},
     {label:'SVG · light bg',url:IconGen.dataSvg(light),filename:base+'_for-light-bg.svg'},{label:'PNG · light bg',url:pl,filename:base+'_for-light-bg.png'}]});
-  save();render();toast('Icon added to '+b.name);setTimeout(()=>document.getElementById('s-elements')?.scrollIntoView(),50)}
+  save();render();toast('Icon added to '+b.name);window.LHtrack&&LHtrack('icon_created',b,name+' (generated in the '+b.name+' icon style)');setTimeout(()=>document.getElementById('s-elements')?.scrollIntoView(),50)}

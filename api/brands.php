@@ -131,8 +131,14 @@ if ($base === 0) {
       }
     }
     process_pending();
-    $diff = $before ? brand_diff(json_decode($before['json'], true) ?: [], $brand) : '';
-    if ($diff !== '' || $trashed) log_activity('client_updated', $user, ['client_id' => $id, 'client_name' => $name, 'details' => ($diff !== '' ? $diff : 'saved') . ($trashed ? ' · ' . $trashed . ' file' . ($trashed > 1 ? 's' : '') . ' moved to the Zoho trash' : '') . (!empty($res['renamed']) ? ' · Zoho folder renamed' : '') . (!empty($res['warning']) ? ' · WARNING: ' . $res['warning'] : '')]);
+    /* one activity row per change, so the admin sees each logo, colour, font… that was added, edited or removed */
+    $changes = $before ? brand_changes(json_decode($before['json'], true) ?: [], $brand) : [['client_updated', 'saved']];
+    foreach (array_slice($changes, 0, 120) as [$act, $det]) {
+      if ($act === 'client_renamed') $det .= (!empty($res['renamed']) ? ' · Zoho folder renamed' : '') . (!empty($res['warning']) ? ' · WARNING: ' . $res['warning'] : '');
+      log_activity($act, $user, ['client_id' => $id, 'client_name' => $name, 'details' => $det]);
+    }
+    if ($trashed) log_activity('files_trashed', $user, ['client_id' => $id, 'client_name' => $name, 'details' => $trashed . ' file' . ($trashed > 1 ? 's' : '') . ' moved to the Zoho trash']);
+    if (!$changes && !$trashed && !empty($res['warning'])) log_activity('client_updated', $user, ['client_id' => $id, 'client_name' => $name, 'details' => 'WARNING: ' . $res['warning']]);
     out(200, $res);
   }
 }

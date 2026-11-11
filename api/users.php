@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-/* Admin only: list people, add a designer, reset a password, switch someone off/on. */
+/* Admin only: list people, add a designer, rename someone, reset a password, switch someone off/on. */
 require __DIR__ . '/_lib.php';
 $method = $_SERVER['REQUEST_METHOD'] ?? '';
 if ($method === 'GET') {
@@ -16,7 +16,7 @@ $x = db();
 $checkPw = function (string $p) { if (strlen($p) < 10) out(400, ['error' => 'Use a password of at least 10 characters.']); };
 if ($act === 'create') {
   $email = strtolower(trim((string)($b['email'] ?? '')));
-  $name = trim((string)($b['name'] ?? ''));
+  $name = clean_person_name((string)($b['name'] ?? ''));
   $role = ($b['role'] ?? 'designer') === 'admin' ? 'admin' : 'designer';
   if (!filter_var($email, FILTER_VALIDATE_EMAIL) || $name === '') out(400, ['error' => 'A valid email and a name are required.']);
   $checkPw((string)($b['password'] ?? ''));
@@ -31,6 +31,13 @@ if ($act === 'create') {
 $id = (int)($b['id'] ?? 0);
 if ($id < 1) out(400, ['error' => 'Missing user id.']);
 $tu = $x->prepare('SELECT name,email FROM lh_users WHERE id=?'); $tu->execute([$id]); $target = $tu->fetch() ?: ['name' => '?', 'email' => '?'];
+if ($act === 'rename') {
+  $name = clean_person_name((string)($b['name'] ?? ''));
+  if ($name === '') out(400, ['error' => 'Type a name (1–60 characters).']);
+  $x->prepare('UPDATE lh_users SET name=? WHERE id=?')->execute([$name, $id]);
+  log_activity('user_renamed', $me, ['details' => '"' . $target['name'] . '" → "' . $name . '" <' . $target['email'] . '>']);
+  out(200, ['ok' => true, 'name' => $name]);
+}
 if ($act === 'password') { $checkPw((string)($b['password'] ?? '')); $x->prepare('UPDATE lh_users SET pass_hash=? WHERE id=?')->execute([password_hash((string)$b['password'], PASSWORD_DEFAULT), $id]); log_activity('password_reset', $me, ['details' => 'for ' . $target['name'] . ' <' . $target['email'] . '>']); out(200, ['ok' => true]); }
 if ($act === 'active') {
   if ($id === (int)$me['id']) out(400, ['error' => 'You cannot switch yourself off.']);

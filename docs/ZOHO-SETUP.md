@@ -1,6 +1,6 @@
 # LatchHub – Zoho WorkDrive + Hostinger setup
 
-What this does: the website talks to small PHP files in `api/`. They sign people in (1 admin + 4 designers), compress uploads, and store/fetch files in your WorkDrive folder. The Zoho keys live in one private file on the server – never in GitHub or in the website.
+What this does: the website talks to small PHP files in `api/`. They sign people in (1 admin + 10 designers), compress uploads, and store/fetch files in your WorkDrive folder. The Zoho keys live in one private file on the server – never in GitHub or in the website.
 
 ## 1. Database (hPanel → Databases → MySQL Databases)
 Create a database and a user (any names). Note the **database name, user and password**.
@@ -28,7 +28,7 @@ Files that exist only on the server are left alone (nothing is deleted), and `lh
 Open `https://YOUR-DOMAIN/api/setup.php?token=YOUR_SETUP_TOKEN`, create the admin account. Then set `'setup_token' => ''` in `lh-config.php` to switch the page off.
 
 ## 5. Check Zoho
-Open `https://YOUR-DOMAIN/admin.html`, sign in, press **Run health check**. Every required line should be ✓. Then add your four designers under **Add a person**.
+Open `https://YOUR-DOMAIN/admin.html`, sign in, press **Run health check**. Every required line should be ✓. Then add your designers under **Team → Add a person**.
 
 ## Notes
 - PDF compression needs Ghostscript on the server. If the health check says it is missing, PDFs are stored as uploaded (images are still compressed).
@@ -77,3 +77,15 @@ Renaming a client in the app also renames its folder in WorkDrive. If WorkDrive 
 
 ## Folders deleted by hand in WorkDrive
 The app remembers each client's Zoho folder. If someone deletes or trashes that folder (or a sub-folder) directly in WorkDrive, the next upload notices (it re-checks a remembered folder every few minutes, and retries once with fresh folders if an upload is refused) and creates a new folder with the client's name. Files that were inside the deleted folder are of course not copied back: restore them from the WorkDrive trash if you need them. Deleting a client in the app whose folder is already gone is clean (nothing stays in the queue).
+
+## Admin dashboard and the activity log
+`admin.html` is the admin's dashboard (admins only). It has five pages:
+- **Overview**: totals for the chosen period (7 days, 30 days, 90 days or 12 months) compared with the period before; activity per day by section; when the team works (weekday × hour); each person's split by section; the busiest clients; the most downloaded files; the latest actions; and what LatchHub holds.
+- **Activity**: every action, in sections: *Viewed, Downloaded & copied, Customised, Edited, Deleted, Added, Design checks, Sign-ins & account, Admin & team, Problems*. Filter by person, client, text or dates; download as CSV.
+- **Team**: one card per person, with a full record, rename, new password and switch off/on.
+- **Clients**: assets, files in Zoho, views, downloads and changes per client.
+- **Zoho & system**: health check, upload test, storage and compression, the clean-up queue and deleted clients.
+
+What is recorded: sign-ins, clients opened, sections jumped to, links opened, every logo / element / font / brand-book / swatch download, copied colours and names, recoloured SVG/PNG exports, white/greyscale logos, generated icons, Design Lens checks, Smart imports, uploads to Zoho, and **every single change to a client**. Each added, edited, renamed or deleted logo, colour, font, element, link, brand book, rule or description is its own line, showing old → new values. Errors the screen showed are recorded too. The log keeps about 13 months.
+
+Designers can change the name the team sees under **Settings → Change name** (their sign-in email stays the same). The admin can rename anyone on the Team page.

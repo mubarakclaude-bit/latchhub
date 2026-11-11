@@ -150,9 +150,9 @@ button.logo{border:0;background:none;cursor:pointer;color:inherit;text-align:lef
 <div id="app"></div>
 <div class="toast" id="toast"></div>
 <script src="js/icons.js?v=28"></script>
-<script src="js/extra.js?v=30"></script>
+<script src="js/extra.js?v=31"></script>
 <script src="js/import.js?v=30"></script><script src="js/pdftools.js?v=4"></script><script src="js/variants.js?v=3"></script><script src="js/svgstudio.js?v=2"></script>
-<script src="js/lens.js?v=38"></script><script src="js/lens2.js?v=9"></script><script src="js/sync.js?v=3"></script>
+<script src="js/lens.js?v=38"></script><script src="js/lens2.js?v=9"></script><script src="js/sync.js?v=4"></script>
 <script>
 /* ---------- helpers ---------- */
 const $=(s,r=document)=>r.querySelector(s);
@@ -361,6 +361,11 @@ function changePw(){const bar=document.getElementById('lh-user');if(!bar)return;
   document.body.appendChild(o);const m=o.querySelector('#pwm'),q=s=>o.querySelector(s);q('#pwx').onclick=()=>o.remove();q('#pw0').focus();
   o.querySelector('form').onsubmit=async e=>{e.preventDefault();if(q('#pw1').value!==q('#pw2').value){m.textContent='The two new passwords do not match.';return}m.textContent='Saving…';
     try{const r=await fetch('api/password.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-LH-CSRF':bar.dataset.csrf},body:JSON.stringify({old:q('#pw0').value,new:q('#pw1').value})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||('Error '+r.status));o.remove();toast('Password changed – use the new one next time you sign in')}catch(err){m.textContent=err.message}}}
+function changeName(){const bar=document.getElementById('lh-user');if(!bar)return;const nm=document.getElementById('lh-name'),cur=nm?nm.textContent:'';const o=document.createElement('div');o.style.cssText='position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px';
+  o.innerHTML='<form style="background:var(--surface,#fff);color:var(--ink,#111);padding:20px;max-width:340px;width:100%;display:grid;gap:10px;font:14px system-ui,sans-serif"><b>Change name</b><span style="font-size:12px;opacity:.7">This is the name your team sees in LatchHub and in the activity log. You still sign in with your email.</span><input type="text" id="nm1" maxlength="60" autocomplete="name" required><div id="nmm" style="min-height:18px;font-size:12px"></div><div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn sm" id="nmx">Cancel</button><button class="btn sm pri">Save</button></div></form>';
+  document.body.appendChild(o);const m=o.querySelector('#nmm'),q=s=>o.querySelector(s);q('#nm1').value=cur;q('#nmx').onclick=()=>o.remove();q('#nm1').focus();q('#nm1').select();
+  o.querySelector('form').onsubmit=async e=>{e.preventDefault();const v=q('#nm1').value.trim();if(!v){m.textContent='Type your name.';return}m.textContent='Saving…';
+    try{const r=await fetch('api/profile.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-LH-CSRF':bar.dataset.csrf},body:JSON.stringify({name:v})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||('Error '+r.status));if(nm)nm.textContent=j.name;o.remove();toast('Name changed to '+j.name)}catch(err){m.textContent=err.message}}}
 const CAN_BACKUP=()=>{const u=document.getElementById('lh-user');return !u||u.dataset.role==='admin'};
 const EDIT_ACTIONS=new Set(['logoVariants','delLink','addColor','editColor','delColor','addFont','delFont','renameLogo','delLogo','renameBrand','delEl']);
 const ui={view:'home',brandId:null,tab:'colors',edit:false,check:{brandId:null,results:[],busy:'',}};
@@ -389,11 +394,11 @@ function render(){
    <div class="tbr"><button class="tl ${ui.view==='check'?'on':''}" data-a="openCheck">Design Lens <span class="muted" style="font-size:9px">beta</span></button>
     <label class="chkl tl"><input type="checkbox" data-c="edit" ${ui.edit?'checked':''}> Edit mode</label>
     <details class="tmore"><summary class="tl">Settings</summary><div class="tpanel">${DARK_MODE?`<div class="cap2">Theme</div><div class="seg tsw">${[['light','Light'],['auto','Auto'],['dark','Dark']].map(t=>`<button class="${THEME.get()===t[0]?'on':''}" data-a="theme" data-id="${t[0]}">${t[1]}</button>`).join('')}</div>`:''}
-     <button class="btn sm" data-a="newBrand">＋ New brand</button>${document.getElementById('lh-user')?'<button class="btn sm" data-a="chPw">Change password</button>':''}${CAN_BACKUP()?'<button class="btn sm" data-a="export">Backup</button><button class="btn sm" data-a="import">Restore</button>':''}</div></details>${CAN_BACKUP()?'<input type="file" id="imp" accept=".json" hidden>':''}</div>
+     <button class="btn sm" data-a="newBrand">＋ New brand</button>${document.getElementById('lh-user')?'<button class="btn sm" data-a="chName">Change name</button><button class="btn sm" data-a="chPw">Change password</button>':''}${CAN_BACKUP()?'<button class="btn sm" data-a="export">Backup</button><button class="btn sm" data-a="import">Restore</button>':''}</div></details>${CAN_BACKUP()?'<input type="file" id="imp" accept=".json" hidden>':''}</div>
   </header><main class="${enter}" style="--brand:${hex}">${DEMO?'<div style="margin-bottom:14px"><span class="badge b-warn">DEMO MODE – sample clients only; your real data is untouched</span></div>':''}${ui.view==='home'?viewHome():ui.view==='check'?viewCheck():(b?viewBrand(b):viewEmpty())}</main>`;
   if(enter)window.scrollTo(0,0);
   if(ui.view==='home'&&typeof homeLogos==='function')homeLogos();
-  const imp=$('#imp');if(imp)imp.onchange=async e=>{if(!CAN_BACKUP()){toast('Only the admin can restore a backup');return}try{const j=JSON.parse(await e.target.files[0].text());if(!j.brands)throw 0;S=j;S.brands.forEach(b=>b.fonts.forEach(f=>f.file&&registerFont(f)));save();ui.brandId=S.brands[0]?.id;ui.anim=true;render();toast('Restored')}catch{toast('Not a valid backup file')}};
+  const imp=$('#imp');if(imp)imp.onchange=async e=>{if(!CAN_BACKUP()){toast('Only the admin can restore a backup');return}try{const j=JSON.parse(await e.target.files[0].text());if(!j.brands)throw 0;S=j;S.brands.forEach(b=>b.fonts.forEach(f=>f.file&&registerFont(f)));save();ui.brandId=S.brands[0]?.id;ui.anim=true;render();toast('Restored');window.LHtrack&&LHtrack('backup_restored',null,S.brands.length+' clients from '+e.target.files[0].name)}catch{toast('Not a valid backup file')}};
 }
 function viewEmpty(){return`<div class="empty"><h2>No clients yet</h2><p>Turn on <b>Edit mode</b> to add a client, or restore your backup.</p><button class="btn pri" data-a="demo">Load demo clients</button></div>`}
 
@@ -532,14 +537,14 @@ document.addEventListener('click',async e=>{
   else if(a==='newIcon'){openIconGen(b.id);return}
   else if(a==='addLink'){openLinkForm(b.id);return}
   else if(a==='delLink'){b.links=(b.links||[]).filter(x=>x.id!==id)}
-  else if(a==='bookblob'){const f=await DB.get(b.book.blobKey);if(!f){toast('Brand book file not found in this browser');return}const u=URL.createObjectURL(f),el=document.createElement('a');el.href=u;el.download=b.book.filename;el.click();setTimeout(()=>URL.revokeObjectURL(u),4000);return}
+  else if(a==='bookblob'){const f=await DB.get(b.book.blobKey);if(!f){toast('Brand book file not found in this browser');return}const u=URL.createObjectURL(f),el=document.createElement('a');el.href=u;el.download=b.book.filename;el.click();window.LHtrack&&LHtrack('brand_book_download',b,b.book.filename||'Brand book');setTimeout(()=>URL.revokeObjectURL(u),4000);return}
   else if(a==='delEl'){if(!confirm('Delete this element and its files?'+(typeof LHsync!=='undefined'&&LHsync.on?' Its files in Zoho are moved to the WorkDrive trash.':'')))return;b.elements=(b.elements||[]).filter(x=>x.id!==id)}
-  else if(a==='open'){ui.view='brand';ui.brandId=id;ui.anim=true}
-  else if(a==='goto'){document.getElementById(id)?.scrollIntoView({behavior:'smooth'});return}
+  else if(a==='open'){ui.view='brand';ui.brandId=id;ui.anim=true;const ob=S.brands.find(x=>x.id===id);if(ob)window.LHtrack&&LHtrack('client_opened',ob,ob.name)}
+  else if(a==='goto'){document.getElementById(id)?.scrollIntoView({behavior:'smooth'});window.LHtrack&&LHtrack('section_viewed',b,(t.textContent||id).trim().slice(0,40));return}
   else if(a==='tab'){ui.tab=id}
   else if(a==='openCheck'){ui.anim=true;ui.view='check';ui.check.brandId=ui.check.brandId||ui.brandId}
   else if(a==='checkThis'){ui.anim=true;ui.view='check';ui.check.brandId=b.id}
-  else if(a==='cp'){copy(t.dataset.v);t.classList.remove('copied');void t.offsetWidth;t.classList.add('copied');return}
+  else if(a==='cp'){copy(t.dataset.v);window.LHtrack&&LHtrack('value_copied',b,t.dataset.v);t.classList.remove('copied');void t.offsetWidth;t.classList.add('copied');return}
   else if(a==='demo'){ui.anim=true;loadDemo();return}
   else if(a==='addBrand'){const n=prompt('Client name?');if(!n)return;const nb=newBrand(n.trim());S.brands.push(nb);ui.brandId=nb.id;ui.view='brand'}
   else if(a==='renameBrand'){const n=prompt('Client name',b.name);if(n)b.name=n.trim();const d=prompt('Short note (optional)',b.notes||'');if(d!==null)b.notes=d}
@@ -550,9 +555,9 @@ document.addEventListener('click',async e=>{
   else if(a==='addColor'){const name=$('#cn').value.trim(),hex=normHex($('#ch').value||$('#cp').value);if(!name||!hex){toast('Enter a name and a valid HEX');return}b.colors.push({id:uid(),name,hex,role:$('#cr').value})}
   else if(a==='editColor'){const c=b.colors.find(x=>x.id===id),n=prompt('Name',c.name);if(n)c.name=n;const h=prompt('HEX',c.hex);if(h&&normHex(h))c.hex=normHex(h)}
   else if(a==='delColor'){b.colors=b.colors.filter(x=>x.id!==id)}
-  else if(a==='copyAll'){copy(b.colors.map(c=>c.hex).join(' '));return}
-  else if(a==='copyCss'){copy(':root{\n'+b.colors.map(c=>`  --${b.name.toLowerCase().replace(/\W+/g,'-')}-${c.name.toLowerCase().replace(/\W+/g,'-')}: ${c.hex};`).join('\n')+'\n}');return}
-  else if(a==='ase'){download(b.name+' swatches.ase',[makeASE(b.colors)],'application/octet-stream');return}
+  else if(a==='copyAll'){copy(b.colors.map(c=>c.hex).join(' '));window.LHtrack&&LHtrack('value_copied',b,'All '+b.colors.length+' colour HEX codes');return}
+  else if(a==='copyCss'){copy(':root{\n'+b.colors.map(c=>`  --${b.name.toLowerCase().replace(/\W+/g,'-')}-${c.name.toLowerCase().replace(/\W+/g,'-')}: ${c.hex};`).join('\n')+'\n}');window.LHtrack&&LHtrack('value_copied',b,'Colours as CSS variables');return}
+  else if(a==='ase'){download(b.name+' swatches.ase',[makeASE(b.colors)],'application/octet-stream');window.LHtrack&&LHtrack('swatch_download',b,b.name+' swatches.ase (Adobe, '+b.colors.length+' colours)');return}
   else if(a==='renameLogo'){const l=b.logos.find(x=>x.id===id),n=prompt('Logo name',l.name);if(n)l.name=n}
   else if(a==='svgCustom'){const l=b.logos.find(x=>x.id===id);if(l)await SVGS.open(b,l);return}
   else if(a==='logoVariants'){const l=b.logos.find(x=>x.id===id);window.LHtrack&&LHtrack('logo_variants',b,'White & greyscale versions of '+(l?l.name:''));toast('Creating white and greyscale versions…',60000);
@@ -564,7 +569,8 @@ document.addEventListener('click',async e=>{
     if(file){f.file=await readFile(file);f.ext=(file.name.match(/\.\w+$/)||['.ttf'])[0];registerFont(f)}b.fonts.push(f)}
   else if(a==='delFont'){if(!confirm('Delete this font?'+(typeof LHsync!=='undefined'&&LHsync.on?' Its file in Zoho is moved to the WorkDrive trash.':'')))return;b.fonts=b.fonts.filter(x=>x.id!==id)}
   else if(a==='chPw'){changePw();return}
-  else if(a==='export'){if(!CAN_BACKUP()){toast('Only the admin can back up');return}download('brand-hub-backup.json',[JSON.stringify(S)],'application/json');return}
+  else if(a==='chName'){changeName();return}
+  else if(a==='export'){if(!CAN_BACKUP()){toast('Only the admin can back up');return}download('brand-hub-backup.json',[JSON.stringify(S)],'application/json');window.LHtrack&&LHtrack('backup_download',null,'All '+S.brands.length+' clients');return}
   else if(a==='import'){if(!CAN_BACKUP()){toast('Only the admin can restore a backup');return}$('#imp').click();return}
   else if(a==='pick'){$('#cf').click();return}
   else return;
@@ -576,7 +582,7 @@ document.addEventListener('change',async e=>{
   if(c==='edit'){ui.edit=t.checked;render()}
   else if(c==='checkBrand'){ui.check.brandId=t.value}
   else if(c&&c.startsWith('rule:')){b.edited=true;const k=c.slice(5);b.rules[k]=t.type==='checkbox'?t.checked:(t.type==='number'?+t.value:t.value);save();toast('Saved')}
-  else if(t.id==='lf'){for(const f of t.files){if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){try{toast('Reading PDF…',60000);const msg=await addPdfToBrand(b,f,x=>toast(x,60000));toast(msg,7000)}catch(err){toast('⚠ '+err.message,7000)}continue}
+  else if(t.id==='lf'){for(const f of t.files){if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){try{toast('Reading PDF…',60000);const msg=await addPdfToBrand(b,f,x=>toast(x,60000));toast(msg,7000);window.LHtrack&&LHtrack('smart_import',b,f.name+' – '+String(msg).slice(0,200))}catch(err){toast('⚠ '+err.message,7000)}continue}
     if(f.type==='image/svg+xml'||/\.svg$/i.test(f.name)){try{const bs=slug2(b.name),l=await processLogo(f);b.logos.push(logoEntry(l,bs));const vs=await logoVariants(l,b.logos);vs.forEach(p=>b.logos.push(logoEntry(p,bs)));if(vs.length)toast('Logo added with '+vs.map(x=>x.name.split(' – ').pop()).join(' + ')+' versions',5000)}catch(err){toast('⚠ '+f.name+': '+err.message,6000)}continue}
     const data=await readFile(f),chk=/^image\/(svg\+xml|png|jpeg|webp)$/.test(f.type),d=chk?await logoDims(f,data):{w:0,h:0};
     b.logos.push({id:uid(),name:f.name.replace(/\.[^.]+$/,''),filename:f.name,data,check:chk,w:d.w,h:d.h})}save();render()}
