@@ -215,9 +215,9 @@ MOCKSIZE(){ python3 -c "import json,base64,sys;d=json.load(open('$T/mock.json'))
 MOCKSHA(){ python3 -c "import json,base64,sys,hashlib;d=json.load(open('$T/mock.json'))['files'];print(hashlib.sha256(base64.b64decode(d[sys.argv[1]].get('data',''))).hexdigest())" "$1"; }
 SHA(){ python3 -c "import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" "$1"; }
 head -c 600000 /dev/urandom > "$T/small.psd"; head -c 1500000 /dev/urandom > "$T/medium.mov"; head -c 3300000 /dev/urandom > "$T/huge.zip"
-S1=$(FMSTART "$T/small.psd" "$CAMP" ""); TK1=$(echo "$S1" | jget token); P1=$(echo "$S1" | jget piece)
+S1=$(FMSTART "$T/small.psd" "$CAMP" ""); TK1=$(echo "$S1" | jget token); PC1=$(echo "$S1" | jget piece)
 ok "small file: normal Zoho upload" single "$(echo "$S1" | jget mode)"
-ok "  … pieces are acknowledged with the bytes received" 600000 "$(FMSEND "$T/small.psd" "$TK1" "$P1" | jget received)"
+ok "  … pieces are acknowledged with the bytes received" 600000 "$(FMSEND "$T/small.psd" "$TK1" "$PC1" | jget received)"
 F1=$(FMFIN "$TK1"); echo "$F1" > "$T/last"; FID1=$(echo "$F1" | jget id)
 ok "  … stored in Zoho, in the chosen folder" "$CAMP" "$(MOCKPARENT "$FID1")"
 ok "  … byte for byte" "$(SHA "$T/small.psd")" "$(MOCKSHA "$FID1")"
@@ -225,29 +225,29 @@ ok "  … finishing twice is harmless" "$FID1" "$(FMFIN "$TK1" | jget id)"
 ok "  … the temporary copy on this server is gone" 0 "$(find "$T/lh-cache/up" -type f -not -name '.lock-*' | wc -l | tr -d ' ')"
 ok "  … it can be downloaded" "$(SHA "$T/small.psd")" "$(curl -s -b "$J" "$B/api/download.php?id=$FID1&dl=1" -o "$T/dlfm" && SHA "$T/dlfm")"
 ok "  … the download says its size (progress bar)" 600000 "$(curl -s -D - -o /dev/null -b "$J" "$B/api/download.php?id=$FID1&dl=1&x=nocache" | grep -i '^content-length' | tr -dc '0-9')"
-S2=$(FMSTART "$T/medium.mov" "" "Shoot/Day 1"); TK2=$(echo "$S2" | jget token); P2=$(echo "$S2" | jget piece)
+S2=$(FMSTART "$T/medium.mov" "" "Shoot/Day 1"); TK2=$(echo "$S2" | jget token); PC2=$(echo "$S2" | jget piece)
 ok "medium file: Zoho stream upload" stream "$(echo "$S2" | jget mode)"
-FMSEND "$T/medium.mov" "$TK2" "$P2" > /dev/null; F2=$(FMFIN "$TK2"); echo "$F2" > "$T/last"; FID2=$(echo "$F2" | jget id)
+FMSEND "$T/medium.mov" "$TK2" "$PC2" > /dev/null; F2=$(FMFIN "$TK2"); echo "$F2" > "$T/last"; FID2=$(echo "$F2" | jget id)
 ok "  … found in Zoho even though its reply carries no id" 1 "$([ -n "$FID2" ] && echo 1 || echo 0)"
 ok "  … byte for byte" "$(SHA "$T/medium.mov")" "$(MOCKSHA "$FID2")"
 ok "  … a dropped folder keeps its sub-folders (Shoot › Day 1)" "Day 1" "$(MOCKNAME "$(MOCKPARENT "$FID2")")"
 ok "  … under Shoot" Shoot "$(MOCKNAME "$(MOCKPARENT "$(MOCKPARENT "$FID2")")")"
-S3=$(FMSTART "$T/huge.zip" "" ""); TK3=$(echo "$S3" | jget token); P3=$(echo "$S3" | jget piece)
+S3=$(FMSTART "$T/huge.zip" "" ""); TK3=$(echo "$S3" | jget token); PC3=$(echo "$S3" | jget piece)
 ok "big file: Zoho chunk session" chunk "$(echo "$S3" | jget mode)"
-ok "  … pieces add up exactly to one Zoho part" 0 "$((1048576 % P3))"
-dd if="$T/huge.zip" of="$T/pc" bs="$P3" count=1 2>/dev/null
-ok "  … a piece out of order is refused with the right offset" 0 "$(FMPIECE "$TK3" "$P3" "$T/pc" | jget received)"
+ok "  … pieces add up exactly to one Zoho part" 0 "$((1048576 % PC3))"
+dd if="$T/huge.zip" of="$T/pc" bs="$PC3" count=1 2>/dev/null
+ok "  … a piece out of order is refused with the right offset" 0 "$(FMPIECE "$TK3" "$PC3" "$T/pc" | jget received)"
 ok "  … a piece of the wrong size is refused" 400 "$(head -c 1000 "$T/huge.zip" > "$T/pcs"; curl -s -o /dev/null -w '%{http_code}' -b "$J" "${H[@]}" -X POST --data-binary @"$T/pcs" "$B/api/fmupload.php?action=piece&token=$TK3&offset=0")"
 FMPIECE "$TK3" 0 "$T/pc" > /dev/null
-ok "  … the same piece sent twice is accepted once" "$P3" "$(FMPIECE "$TK3" 0 "$T/pc" | jget received)"
+ok "  … the same piece sent twice is accepted once" "$PC3" "$(FMPIECE "$TK3" 0 "$T/pc" | jget received)"
 ok "  … finishing too early is refused" 409 "$(curl -s -o /dev/null -w '%{http_code}' -b "$J" "${H[@]}" -X POST "$B/api/fmupload.php?action=finish&token=$TK3")"
 # connection lost after 1.5 MB: the browser asks to start the same file again and continues where it stopped
-FMSEND "$T/huge.zip" "$TK3" "$P3" "$P3" > /dev/null & SPID=$!; sleep 0.4; kill $SPID 2>/dev/null; wait $SPID 2>/dev/null
+FMSEND "$T/huge.zip" "$TK3" "$PC3" "$PC3" > /dev/null & SPID=$!; sleep 0.4; kill $SPID 2>/dev/null; wait $SPID 2>/dev/null
 S3b=$(FMSTART "$T/huge.zip" "" ""); ok "  … starting the same file again continues the same upload" "$TK3" "$(echo "$S3b" | jget token)"
 R3=$(echo "$S3b" | jget received)
 ok "  … from where it stopped" 1 "$([ "$R3" -gt 0 ] && echo 1 || echo 0)"
 ok "  … this server holds at most one Zoho part (1 MB here)" 1 "$([ "$(find "$T/lh-cache/up" -type f -not -name '.lock-*' -size +1025k | wc -l)" -eq 0 ] && echo 1 || echo 0)"
-FMSEND "$T/huge.zip" "$TK3" "$P3" "$R3" > /dev/null
+FMSEND "$T/huge.zip" "$TK3" "$PC3" "$R3" > /dev/null
 echo reject > "$T/mock.json.fail"; F3=$(FMFIN "$TK3"); echo "$F3" > "$T/last"
 ok "  … Zoho refusing the last part: a clear message with Retry" 1 "$(echo "$F3" | python3 -c 'import sys,json;print(1 if "Retry" in json.load(sys.stdin).get("error","") else 0)')"
 ok "  … the upload stays open with every byte kept" "open 3300000" "$(curl -s -b "$J" "$B/api/fmupload.php?action=status&token=$TK3" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d["state"],d["received"])')"
