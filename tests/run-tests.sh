@@ -57,6 +57,17 @@ H2=$(curl -s -b "$J" "$B/api/health.php"); ok "health: all required ok" True "$(
 echo "real upload self-test"
 ST=$(curl -s -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{}' "$B/api/selftest.php"); ok "self-test: create folder, upload, find id, download" True "$(echo "$ST" | jget all_ok)"
 ok "self-test needs the CSRF header" 403 "$(code -X POST -H 'Content-Type: application/json' -d '{}' "$B/api/selftest.php")"
+ok "self-test includes the large-file route (Zoho's upload server)" True "$(echo "$ST" | python3 -c 'import sys,json;print([x["ok"] for x in json.load(sys.stdin)["steps"] if x["step"].startswith("Large-file route")][0])')"
+echo "a Zoho key without the file-server permissions (ZohoFiles.files.*)"
+echo sc > "$T/sc.txt"; SCID=$(curl -s -b "$J" "${H[@]}" -F client=scope01 -F client_name="Scope Co" -F kind=asset -F file=@"$T/sc.txt" "$B/api/upload.php" | jget id)
+touch "$T/mock.json.noscope"
+ST2=$(curl -s -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{}' "$B/api/selftest.php"); echo "$ST2" > "$T/last"
+ok "the self-test fails" False "$(echo "$ST2" | jget all_ok)"
+ok "  … and names the missing download permission" 1 "$(echo "$ST2" | python3 -c 'import sys,json;print(sum(1 for x in json.load(sys.stdin)["steps"] if not x["ok"] and "ZohoFiles.files.READ" in x["note"]))')"
+ok "  … and the missing large-file permission" 1 "$(echo "$ST2" | python3 -c 'import sys,json;print(sum(1 for x in json.load(sys.stdin)["steps"] if not x["ok"] and "ZohoFiles.files.CREATE" in x["note"]))')"
+ok "a download says which permission the key lacks" 1 "$(curl -s -b "$J" "$B/api/download.php?id=$SCID" | grep -c 'ZohoFiles.files.READ')"
+rm -f "$T/mock.json.noscope"
+ok "with the right key the same download works" sc "$(curl -s -b "$J" "$B/api/download.php?id=$SCID")"
 echo "uploads"
 $PHP -r '
 $w=3600;$h=2400;$im=imagecreatetruecolor($w,$h);for($y=0;$y<$h;$y+=4)for($x=0;$x<$w;$x+=4){$c=imagecolorallocate($im,min(255,intdiv($x,14)+mt_rand(0,60)),min(255,intdiv($y,10)+mt_rand(0,60)),mt_rand(0,255));imagefilledrectangle($im,$x,$y,$x+3,$y+3,$c);}

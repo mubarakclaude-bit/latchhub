@@ -23,7 +23,7 @@ if (!$step('Find the uploaded file\'s id', $id !== '', $id !== '' ? ($fromReply 
 $ch = curl_init(rtrim(cfg()['zoho']['download'], '/') . '/' . rawurlencode($id));
 curl_setopt_array($ch, [CURLOPT_HTTPHEADER => ['Authorization: Zoho-oauthtoken ' . zoho_token()], CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_UNRESTRICTED_AUTH => true, CURLOPT_MAXREDIRS => 3, CURLOPT_TIMEOUT => 60]);
 $got = curl_exec($ch); $dst = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE); $hops = (int)curl_getinfo($ch, CURLINFO_REDIRECT_COUNT); $host = (string)parse_url((string)curl_getinfo($ch, CURLINFO_EFFECTIVE_URL), PHP_URL_HOST); curl_close($ch);
-$okDl = $step('Download it back and compare', $dst === 200 && $got === $body, 'HTTP ' . $dst . ' from ' . $host . ($hops ? ' after ' . $hops . ' redirect(s)' : '') . ($dst === 200 ? ($got === $body ? ', content identical' : ', but the content differs') : ' – Zoho said: ' . substr(preg_replace('/\s+/', ' ', (string)$got), 0, 240)));
+$okDl = $step('Download it back and compare', $dst === 200 && $got === $body, 'HTTP ' . $dst . ' from ' . $host . ($hops ? ' after ' . $hops . ' redirect(s)' : '') . ($dst === 200 ? ($got === $body ? ', content identical' : ', but the content differs') : ' – Zoho said: ' . substr(preg_replace('/\s+/', ' ', (string)$got), 0, 240) . zoho_scope_hint((string)$got, 'ZohoFiles.files.READ (downloads)')));
 $newName = 'selftest-renamed-' . date('His') . '.txt';
 [$rok, $rcode, $rraw] = zoho_rename($id, $newName);
 $seen = false; if ($rok) foreach (zoho_list($folder) as $it) { if ($it['id'] === $id && $it['name'] === $newName) $seen = true; }
@@ -41,6 +41,6 @@ require_once __DIR__ . '/_fm.php';
 $name3 = 'selftest-stream-' . date('His') . '.txt'; $tmp3 = tempnam(sys_get_temp_dir(), 'lhs'); file_put_contents($tmp3, 'stream upload test');
 [$s3, $r3, $j3] = zoho_stream_upload($folder, $tmp3, $name3, bin2hex(random_bytes(8))); @unlink($tmp3);
 $id3 = in_array($s3, [200, 201], true) ? (pick_id($j3) ?? zoho_find_id($folder, $name3)) : '';
-$step('Large-file route: upload through Zoho\'s upload server (' . parse_url(zoho_upload_host(), PHP_URL_HOST) . ')', $id3 !== '', 'HTTP ' . $s3 . ($id3 !== '' ? ', the file arrived – files over 250 MB will work' : ' – Zoho said: ' . substr(preg_replace('/\\s+/', ' ', $r3), 0, 200) . '. Files under 250 MB still work.'));
+$step('Large-file route: upload through Zoho\'s upload server (' . parse_url(zoho_upload_host(), PHP_URL_HOST) . ')', $id3 !== '', 'HTTP ' . $s3 . ($id3 !== '' ? ', the file arrived – files over 250 MB will work' : ' – Zoho said: ' . substr(preg_replace('/\\s+/', ' ', $r3), 0, 200) . '. Files under 250 MB still work.' . zoho_scope_hint($r3, 'ZohoFiles.files.CREATE (files over 250 MB)')));
 if ($id3 !== '') zoho_trash($id3);
 $done();

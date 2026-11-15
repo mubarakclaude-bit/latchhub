@@ -45,11 +45,14 @@ if ($cacheFile && is_file($cacheFile)) { $sendHeaders((int)filesize($cacheFile))
 /* stream from Zoho, saving a copy for next time */
 $status = 0; $sent = false; $tee = null; $bytes = 0; $zlen = null;
 if ($cacheDir && (is_dir($cacheDir) || @mkdir($cacheDir, 0700, true))) $tee = @fopen($cacheFile . '.part' . getmypid(), 'wb') ?: null;
+$errBody = '';
+for ($try = 0; $try < 2; $try++) {   /* a refused login is retried once with a fresh one */
+$status = 0; $zlen = null;
 $ch = curl_init(rtrim(cfg()['zoho']['download'], '/') . '/' . rawurlencode($id));
-curl_setopt_array($ch, [CURLOPT_HTTPHEADER => ['Authorization: Zoho-oauthtoken ' . zoho_token()], CURLOPT_FOLLOWLOCATION => true, CURLOPT_UNRESTRICTED_AUTH => true, CURLOPT_MAXREDIRS => 3, CURLOPT_CONNECTTIMEOUT => 15, CURLOPT_TIMEOUT => 0,
+curl_setopt_array($ch, [CURLOPT_HTTPHEADER => ['Authorization: Zoho-oauthtoken ' . zoho_token($try === 1)], CURLOPT_FOLLOWLOCATION => true, CURLOPT_UNRESTRICTED_AUTH => true, CURLOPT_MAXREDIRS => 3, CURLOPT_CONNECTTIMEOUT => 15, CURLOPT_TIMEOUT => 0,
   CURLOPT_HEADERFUNCTION => function ($c, $h) use (&$status, &$zlen) { if (preg_match('#^HTTP/\S+\s+(\d+)#', $h, $m)) { $status = (int)$m[1]; $zlen = null; } elseif (preg_match('#^content-length:\s*(\d+)#i', $h, $m)) $zlen = (int)$m[1]; return strlen($h); },
-  CURLOPT_WRITEFUNCTION => function ($c, $d) use (&$status, &$sent, &$tee, &$bytes, &$zlen, $sendHeaders) {
-    if ($status !== 200) return strlen($d);
+  CURLOPT_WRITEFUNCTION => function ($c, $d) use (&$status, &$sent, &$tee, &$bytes, &$zlen, &$errBody, $sendHeaders) {
+    if ($status !== 200) { if (strlen($errBody) < 400) $errBody .= substr($d, 0, 400); return strlen($d); }
     if (!$sent) { $sendHeaders($zlen); $sent = true; }   /* pass Zoho's size on, so the browser shows download progress for big files */
     echo $d; flush();
     $bytes += strlen($d);
@@ -58,9 +61,15 @@ curl_setopt_array($ch, [CURLOPT_HTTPHEADER => ['Authorization: Zoho-oauthtoken '
   }]);
 curl_exec($ch);
 curl_close($ch);
+if ($sent || !in_array($status, [400, 401], true)) break;
+}
 if ($tee) {
   fclose($tee);
   $part = $cacheFile . '.part' . getmypid();
   if ($sent && $bytes > 0) @rename($part, $cacheFile); else @unlink($part);
 }
-if (!$sent) out(502, ['error' => 'Zoho did not return the file.', 'status' => $status]);
+if (!$sent) {
+  $hint = zoho_scope_hint($errBody, 'ZohoFiles.files.READ (downloads)');
+  if ($hint !== '') error_log('LatchHub download: Zoho key lacks the download scope');
+  out(502, ['error' => 'Zoho did not return the file.' . $hint, 'status' => $status]);
+}

@@ -88,6 +88,7 @@ if ($path === '/workdrive-api/v1/stream/upload' && $m === 'POST') {
   $id = 'STRMFILE' . (++$st['n']) . '000'; $st['files'][$id] = ['name' => $nm, 'parent' => $par, 'folder' => false, 'data' => base64_encode($body)]; $save();
   $j(['data' => [['attributes' => ['FileName' => $nm, 'parent_id' => $par], 'type' => 'files']]]);   /* no id in the reply: LatchHub must find it by name */
 }
+if (is_file($stateFile . '.noscope') && (strpos($path, '/v1/workdrive/download/') === 0 || $path === '/workdrive-api/v1/stream/upload')) $j(['ERROR_MESSAGE' => 'INVALID_OAUTHSCOPE', 'ERROR_CODE' => 'F7004'], 401);   /* a key made without ZohoFiles.files.* */
 if (preg_match('#^/v1/workdrive/download/([A-Za-z0-9]+)$#', $path, $mm) && $m === 'GET') { if (!isset($st['files'][$mm[1]])) $j([], 404); header('Location: http://localhost:' . $_SERVER['SERVER_PORT'] . '/storage/' . $mm[1], true, 302); exit; }
 if (preg_match('#^/storage/([A-Za-z0-9]+)$#', $path, $mm) && $m === 'GET') { if (!isset($st['files'][$mm[1]]) || !empty($st['files'][$mm[1]]['trashed'])) $j([], 404); header('Content-Type: application/octet-stream'); echo base64_decode($st['files'][$mm[1]]['data'] ?? ''); exit; }
 $j(['errors' => ['no such mock route', $path]], 404);

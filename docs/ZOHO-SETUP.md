@@ -12,6 +12,28 @@ Create `lh-config.php` there, copy the contents of `lh-config.sample.php` from t
 - `client_id`, `client_secret`, `refresh_token` from your Zoho Self Client
 - `setup_token`: make up a long random string (20+ characters)
 
+### Zoho key permissions
+The Self Client key must be created with exactly these scopes (all of them; nothing that allows permanent delete):
+```
+WorkDrive.files.CREATE,WorkDrive.files.READ,WorkDrive.files.UPDATE,ZohoFiles.files.CREATE,ZohoFiles.files.READ
+```
+- `WorkDrive.files.*`: list folders, create folders, upload, rename, move to the trash.
+- `ZohoFiles.files.READ`: **downloads** (Zoho serves files from a separate download server, `download.zoho.in`, that checks this permission).
+- `ZohoFiles.files.CREATE`: uploads of files **over 250 MB** (Zoho's upload server, `upload.zoho.in`).
+Without the two ZohoFiles permissions everything looks fine except downloads (`INVALID_OAUTHSCOPE` in the upload test) and big uploads.
+
+To make a new key (India data centre; takes 5 minutes):
+1. Open https://api-console.zoho.in → your **Self Client** → tab **Generate Code**.
+2. Scope: paste the line above. Time duration: 10 minutes. Description: `LatchHub`. Press **Create**, choose the WorkDrive team if asked, copy the code.
+3. Within 10 minutes, on your Mac's Terminal (put in your own client id, secret and the code):
+   ```
+   curl -s -X POST https://accounts.zoho.in/oauth/v2/token -d grant_type=authorization_code -d client_id=CLIENT_ID -d client_secret=CLIENT_SECRET -d code=THE_CODE
+   ```
+   The reply contains `"refresh_token":"1000.…"`.
+4. hPanel → File Manager → `lh-config.php` (above `public_html`): replace the old `refresh_token` with the new one and save. It takes effect immediately.
+5. Admin → Zoho & system → **Run upload test**: every step ✓.
+Never paste the codes or tokens in chat or commit them.
+
 ## 3. Deploy the code from GitHub (GitHub Actions over SSH)
 Every push to `main` runs the tests and then copies the changed files to `domains/latchinfinity.com/public_html/LatchHub/` with rsync over SSH (`.github/workflows/deploy.yml`).
 

@@ -125,16 +125,24 @@ function http(string $method, string $url, array $headers = [], $body = null, in
   curl_close($ch);
   return [$st, (string)$res];
 }
+/* the short-lived Zoho login is cached per key: after the refresh token in lh-config.php is replaced (e.g. with new permissions) the new one is used at once */
+function zoho_at_key(): string { return 'zoho_at:' . substr(md5((string)(cfg()['zoho']['refresh_token'] ?? '')), 0, 12); }
+/* Zoho's file servers need their own permissions besides WorkDrive's: say exactly which one is missing */
+const LH_ZOHO_SCOPES = 'WorkDrive.files.CREATE,WorkDrive.files.READ,WorkDrive.files.UPDATE,ZohoFiles.files.CREATE,ZohoFiles.files.READ';
+function zoho_scope_hint(string $raw, string $needed): string {
+  if (stripos($raw, 'INVALID_OAUTHSCOPE') === false && stripos($raw, 'F7004') === false && stripos($raw, 'Invalid OAuth scope') === false) return '';
+  return ' The Zoho key is missing the permission ' . $needed . '. Create a new key with the scopes ' . LH_ZOHO_SCOPES . ' (docs/ZOHO-SETUP.md, "Zoho key permissions") and put the new refresh_token in lh-config.php.';
+}
 function zoho_token(bool $force = false): string {
   $z = cfg()['zoho'];
   if (!$force) {
-    $r = db()->query("SELECT v,exp FROM lh_kv WHERE k='zoho_at'")->fetch();
+    $q = db()->prepare('SELECT v,exp FROM lh_kv WHERE k=?'); $q->execute([zoho_at_key()]); $r = $q->fetch();
     if ($r && (int)$r['exp'] > time() + 120) return $r['v'];
   }
   [$st, $b] = http('POST', rtrim($z['accounts'], '/') . '/oauth/v2/token', [], http_build_query(['grant_type' => 'refresh_token', 'client_id' => $z['client_id'], 'client_secret' => $z['client_secret'], 'refresh_token' => $z['refresh_token']]));
   $j = json_decode($b, true);
   if (empty($j['access_token'])) { error_log('LatchHub zoho token: ' . substr($b, 0, 200)); out(502, ['error' => 'Zoho authorisation failed.', 'detail' => is_array($j) ? ($j['error'] ?? 'unknown') : 'no response']); }
-  db()->prepare('REPLACE INTO lh_kv (k,v,exp) VALUES (?,?,?)')->execute(['zoho_at', $j['access_token'], time() + (int)($j['expires_in'] ?? 3600)]);
+  db()->prepare('REPLACE INTO lh_kv (k,v,exp) VALUES (?,?,?)')->execute([zoho_at_key(), $j['access_token'], time() + (int)($j['expires_in'] ?? 3600)]);
   return $j['access_token'];
 }
 /* JSON call to the WorkDrive API; retries once with a fresh token */
