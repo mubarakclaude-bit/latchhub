@@ -2,12 +2,13 @@
 # Runs the connector against a fake Zoho. Usage: PHP=/path/to/php bash tests/run-tests.sh
 set -u
 PHP=${PHP:-php}; ROOT=$(cd "$(dirname "$0")/.." && pwd)
+for port in 8901 8902 8903; do if curl -s -o /dev/null --max-time 1 "http://127.0.0.1:$port/"; then echo "Port $port is already in use (an earlier test run still running?). Stop it first, e.g.: pkill -f 'php .*-S .*:890'"; exit 2; fi; done
 T=$(mktemp -d); SITE=$T/public_html; mkdir -p "$SITE"; cp -R "$ROOT/api" "$SITE/api"; cp "$ROOT/index.php" "$SITE/index.php"; printf '<!doctype html><title>APP</title><body>APP-MARKER</body>' > "$SITE/index.html"
 cp "$ROOT/serve.php" "$SITE/serve.php"; mkdir -p "$SITE/assets/kaynes" "$SITE/assets/latchhub"; echo '<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>' > "$SITE/assets/kaynes/logo.svg"; echo '<svg xmlns="http://www.w3.org/2000/svg"/>' > "$SITE/assets/latchhub/favicon.svg"; echo '{"brands":[{"name":"Secret Client"}]}' > "$SITE/brand-hub-data.json"; echo '<?php echo "pwned";' > "$SITE/assets/kaynes/evil.php"; echo hidden > "$SITE/assets/.secret"
 cat > "$T/lh-config.php" <<C
-<?php return ['db'=>['dsn'=>'sqlite:$T/t.db'],'zoho'=>['client_id'=>'cid','client_secret'=>'sec','refresh_token'=>'RT','root_folder_id'=>'ROOT000000001','accounts'=>'http://127.0.0.1:8901','api'=>'http://127.0.0.1:8901/workdrive/api/v1','download'=>'http://127.0.0.1:8901/v1/workdrive/download/'],'setup_token'=>'0123456789abcdef0123','max_upload_mb'=>50,'folder_check_ttl'=>2];
+<?php return ['db'=>['dsn'=>'sqlite:$T/t.db'],'zoho'=>['client_id'=>'cid','client_secret'=>'sec','refresh_token'=>'RT','root_folder_id'=>'ROOT000000001','accounts'=>'http://127.0.0.1:8901','api'=>'http://127.0.0.1:8901/workdrive/api/v1','download'=>'http://127.0.0.1:8901/v1/workdrive/download/','upload'=>'http://127.0.0.1:8901'],'setup_token'=>'0123456789abcdef0123','max_upload_mb'=>50,'folder_check_ttl'=>2,'fm'=>['single_max'=>1000000,'chunk_min'=>2097152,'piece'=>262144]];
 C
-MOCK_STATE=$T/mock.json $PHP -d upload_max_filesize=64M -d post_max_size=64M -S 0.0.0.0:8901 "$ROOT/tests/mock_zoho.php" >/dev/null 2>&1 & P1=$!
+MOCK_STATE=$T/mock.json MOCK_CHUNK=1048576 MOCK_CHUNK_MIN=2097152 $PHP -d upload_max_filesize=64M -d post_max_size=64M -S 0.0.0.0:8901 "$ROOT/tests/mock_zoho.php" >/dev/null 2>&1 & P1=$!
 $PHP -d upload_max_filesize=64M -d post_max_size=64M -d memory_limit=1024M -S 127.0.0.1:8902 -t "$SITE" >/dev/null 2>&1 & P2=$!
 trap 'kill $P1 $P2 2>/dev/null; rm -rf "$T"' EXIT; sleep 1
 B=http://127.0.0.1:8902; J="$T/cj"; PASS=0; FAIL=0
@@ -56,6 +57,17 @@ H2=$(curl -s -b "$J" "$B/api/health.php"); ok "health: all required ok" True "$(
 echo "real upload self-test"
 ST=$(curl -s -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{}' "$B/api/selftest.php"); ok "self-test: create folder, upload, find id, download" True "$(echo "$ST" | jget all_ok)"
 ok "self-test needs the CSRF header" 403 "$(code -X POST -H 'Content-Type: application/json' -d '{}' "$B/api/selftest.php")"
+ok "self-test includes the large-file route (Zoho's upload server)" True "$(echo "$ST" | python3 -c 'import sys,json;print([x["ok"] for x in json.load(sys.stdin)["steps"] if x["step"].startswith("Large-file route")][0])')"
+echo "a Zoho key without the file-server permissions (ZohoFiles.files.*)"
+echo sc > "$T/sc.txt"; SCID=$(curl -s -b "$J" "${H[@]}" -F client=scope01 -F client_name="Scope Co" -F kind=asset -F file=@"$T/sc.txt" "$B/api/upload.php" | jget id)
+touch "$T/mock.json.noscope"
+ST2=$(curl -s -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{}' "$B/api/selftest.php"); echo "$ST2" > "$T/last"
+ok "the self-test fails" False "$(echo "$ST2" | jget all_ok)"
+ok "  … and names the missing download permission" 1 "$(echo "$ST2" | python3 -c 'import sys,json;print(sum(1 for x in json.load(sys.stdin)["steps"] if not x["ok"] and "ZohoFiles.files.READ" in x["note"]))')"
+ok "  … and the missing large-file permission" 1 "$(echo "$ST2" | python3 -c 'import sys,json;print(sum(1 for x in json.load(sys.stdin)["steps"] if not x["ok"] and "ZohoFiles.files.CREATE" in x["note"]))')"
+ok "a download says which permission the key lacks" 1 "$(curl -s -b "$J" "$B/api/download.php?id=$SCID" | grep -c 'ZohoFiles.files.READ')"
+rm -f "$T/mock.json.noscope"
+ok "with the right key the same download works" sc "$(curl -s -b "$J" "$B/api/download.php?id=$SCID")"
 echo "uploads"
 $PHP -r '
 $w=3600;$h=2400;$im=imagecreatetruecolor($w,$h);for($y=0;$y<$h;$y+=4)for($x=0;$x<$w;$x+=4){$c=imagecolorallocate($im,min(255,intdiv($x,14)+mt_rand(0,60)),min(255,intdiv($y,10)+mt_rand(0,60)),mt_rand(0,255));imagefilledrectangle($im,$x,$y,$x+3,$y+3,$c);}
@@ -189,6 +201,97 @@ RDH=$(curl -s -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d '
 ok "  … nothing is left waiting in the queue for it" 0 "$(sqlite3 "$T/t.db" "select count(*) from lh_pending where zoho_id='$HCLI3'")"
 ok "admin can delete a brand" 200 "$(curl -s -o /dev/null -w '%{http_code}' -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"action":"delete","id":"solid01"}' "$B/api/brands.php")"
 R4=$(BR '{"action":"save","base_version":0,"brand":{"id":"solid01","name":"Solid Semi","colors":[]}}'); ok "re-create after delete (for the designer checks)" 1 "$(echo "$R4" | jget version)"
+echo "file manager: browse the client's Zoho folder"
+FMJ(){ curl -s -o "$T/last" -w '%{http_code}' -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d "$1" "$B/api/fm.php"; }
+FMG(){ curl -s -b "$J" "$B/api/fm.php?client=fmcli01&name=FM%20Client${1:-}"; }
+ok "a client without a Zoho folder lists nothing (and nothing is created)" 0 "$(FMG | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["items"]))')"
+ok "not signed in -> 401" 401 "$(curl -s -o /dev/null -w '%{http_code}' "$B/api/fm.php?client=fmcli01")"
+ok "new folder" 200 "$(FMJ '{"action":"mkdir","client":"fmcli01","name":"FM Client","folder_name":"Campaigns"}')"
+CAMP=$(jget id < "$T/last")
+ok "  … the same name twice is refused" 409 "$(FMJ '{"action":"mkdir","client":"fmcli01","name":"FM Client","folder_name":"campaigns"}')"
+ok "  … it is listed in the client folder" Campaigns "$(FMG | jget items.0.name)"
+ok "  … needs the CSRF header" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$J" -X POST -H 'Content-Type: application/json' -d '{"action":"mkdir","client":"fmcli01","folder_name":"X"}' "$B/api/fm.php")"
+ok "open a sub-folder: the trail leads back to the client folder" Campaigns "$(FMG "&folder=$CAMP" | jget trail.0.name)"
+ok "a folder of another client cannot be opened" 404 "$(curl -s -o /dev/null -w '%{http_code}' -b "$J" "$B/api/fm.php?client=fmcli01&folder=OTHERFOLDER01")"
+ok "the LatchHub root itself cannot be opened through a client" 404 "$(curl -s -o /dev/null -w '%{http_code}' -b "$J" "$B/api/fm.php?client=fmcli01&folder=ROOT000000001")"
+echo "file manager: uploads of any size, in pieces, resumable"
+# FMSTART <file> <folder-id or ''> <relative path> -> start reply ; FMPIECE token offset piecefile -> reply
+FMSTART(){ curl -s -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d "{\"client\":\"fmcli01\",\"client_name\":\"FM Client\",\"folder\":\"$2\",\"path\":\"$3\",\"name\":\"$(basename "$1")\",\"size\":$(wc -c < "$1" | tr -d ' '),\"last_modified\":${4:-1700000000000}}" "$B/api/fmupload.php?action=start"; }
+FMPIECE(){ curl -s -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/octet-stream' --data-binary @"$3" "$B/api/fmupload.php?action=piece&token=$1&offset=$2"; }
+FMFIN(){ curl -s -b "$J" "${H[@]}" -X POST "$B/api/fmupload.php?action=finish&token=$1"; }
+# FMSEND <file> <token> <piece> [from-offset] : sends the remaining pieces, prints the last reply
+FMSEND(){ local f=$1 tok=$2 pc=$3 off=${4:-0} size r=''; size=$(wc -c < "$f" | tr -d ' ')
+  while [ "$off" -lt "$size" ]; do dd if="$f" of="$T/pc" bs="$pc" skip=$((off/pc)) count=1 2>/dev/null; r=$(FMPIECE "$tok" "$off" "$T/pc"); off=$((off+$(wc -c < "$T/pc" | tr -d ' '))); done; echo "$r"; }
+MOCKSIZE(){ python3 -c "import json,base64,sys;d=json.load(open('$T/mock.json'))['files'];print(len(base64.b64decode(d[sys.argv[1]].get('data',''))))" "$1"; }
+MOCKSHA(){ python3 -c "import json,base64,sys,hashlib;d=json.load(open('$T/mock.json'))['files'];print(hashlib.sha256(base64.b64decode(d[sys.argv[1]].get('data',''))).hexdigest())" "$1"; }
+SHA(){ python3 -c "import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" "$1"; }
+head -c 600000 /dev/urandom > "$T/small.psd"; head -c 1500000 /dev/urandom > "$T/medium.mov"; head -c 3300000 /dev/urandom > "$T/huge.zip"
+S1=$(FMSTART "$T/small.psd" "$CAMP" ""); TK1=$(echo "$S1" | jget token); PC1=$(echo "$S1" | jget piece)
+ok "small file: normal Zoho upload" single "$(echo "$S1" | jget mode)"
+ok "  … pieces are acknowledged with the bytes received" 600000 "$(FMSEND "$T/small.psd" "$TK1" "$PC1" | jget received)"
+F1=$(FMFIN "$TK1"); echo "$F1" > "$T/last"; FID1=$(echo "$F1" | jget id)
+ok "  … stored in Zoho, in the chosen folder" "$CAMP" "$(MOCKPARENT "$FID1")"
+ok "  … byte for byte" "$(SHA "$T/small.psd")" "$(MOCKSHA "$FID1")"
+ok "  … finishing twice is harmless" "$FID1" "$(FMFIN "$TK1" | jget id)"
+ok "  … the temporary copy on this server is gone" 0 "$(find "$T/lh-cache/up" -type f -not -name '.lock-*' | wc -l | tr -d ' ')"
+ok "  … it can be downloaded" "$(SHA "$T/small.psd")" "$(curl -s -b "$J" "$B/api/download.php?id=$FID1&dl=1" -o "$T/dlfm" && SHA "$T/dlfm")"
+ok "  … the download says its size (progress bar)" 600000 "$(curl -s -D - -o /dev/null -b "$J" "$B/api/download.php?id=$FID1&dl=1&x=nocache" | grep -i '^content-length' | tr -dc '0-9')"
+S2=$(FMSTART "$T/medium.mov" "" "Shoot/Day 1"); TK2=$(echo "$S2" | jget token); PC2=$(echo "$S2" | jget piece)
+ok "medium file: Zoho stream upload" stream "$(echo "$S2" | jget mode)"
+FMSEND "$T/medium.mov" "$TK2" "$PC2" > /dev/null; F2=$(FMFIN "$TK2"); echo "$F2" > "$T/last"; FID2=$(echo "$F2" | jget id)
+ok "  … found in Zoho even though its reply carries no id" 1 "$([ -n "$FID2" ] && echo 1 || echo 0)"
+ok "  … byte for byte" "$(SHA "$T/medium.mov")" "$(MOCKSHA "$FID2")"
+ok "  … a dropped folder keeps its sub-folders (Shoot › Day 1)" "Day 1" "$(MOCKNAME "$(MOCKPARENT "$FID2")")"
+ok "  … under Shoot" Shoot "$(MOCKNAME "$(MOCKPARENT "$(MOCKPARENT "$FID2")")")"
+S3=$(FMSTART "$T/huge.zip" "" ""); TK3=$(echo "$S3" | jget token); PC3=$(echo "$S3" | jget piece)
+ok "big file: Zoho chunk session" chunk "$(echo "$S3" | jget mode)"
+ok "  … pieces add up exactly to one Zoho part" 0 "$((1048576 % PC3))"
+dd if="$T/huge.zip" of="$T/pc" bs="$PC3" count=1 2>/dev/null
+ok "  … a piece out of order is refused with the right offset" 0 "$(FMPIECE "$TK3" "$PC3" "$T/pc" | jget received)"
+ok "  … a piece of the wrong size is refused" 400 "$(head -c 1000 "$T/huge.zip" > "$T/pcs"; curl -s -o /dev/null -w '%{http_code}' -b "$J" "${H[@]}" -X POST --data-binary @"$T/pcs" "$B/api/fmupload.php?action=piece&token=$TK3&offset=0")"
+FMPIECE "$TK3" 0 "$T/pc" > /dev/null
+ok "  … the same piece sent twice is accepted once" "$PC3" "$(FMPIECE "$TK3" 0 "$T/pc" | jget received)"
+ok "  … finishing too early is refused" 409 "$(curl -s -o /dev/null -w '%{http_code}' -b "$J" "${H[@]}" -X POST "$B/api/fmupload.php?action=finish&token=$TK3")"
+# connection lost after 1.5 MB: the browser asks to start the same file again and continues where it stopped
+FMSEND "$T/huge.zip" "$TK3" "$PC3" "$PC3" > /dev/null & SPID=$!; sleep 0.4; kill $SPID 2>/dev/null; wait $SPID 2>/dev/null
+S3b=$(FMSTART "$T/huge.zip" "" ""); ok "  … starting the same file again continues the same upload" "$TK3" "$(echo "$S3b" | jget token)"
+R3=$(echo "$S3b" | jget received)
+ok "  … from where it stopped" 1 "$([ "$R3" -gt 0 ] && echo 1 || echo 0)"
+ok "  … this server holds at most one Zoho part (1 MB here)" 1 "$([ "$(find "$T/lh-cache/up" -type f -not -name '.lock-*' -size +1025k | wc -l)" -eq 0 ] && echo 1 || echo 0)"
+FMSEND "$T/huge.zip" "$TK3" "$PC3" "$R3" > /dev/null
+echo reject > "$T/mock.json.fail"; F3=$(FMFIN "$TK3"); echo "$F3" > "$T/last"
+ok "  … Zoho refusing the last part: a clear message with Retry" 1 "$(echo "$F3" | python3 -c 'import sys,json;print(1 if "Retry" in json.load(sys.stdin).get("error","") else 0)')"
+ok "  … the upload stays open with every byte kept" "open 3300000" "$(curl -s -b "$J" "$B/api/fmupload.php?action=status&token=$TK3" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d["state"],d["received"])')"
+F3=$(FMFIN "$TK3"); echo "$F3" > "$T/last"; FID3=$(echo "$F3" | jget id)
+ok "  … Retry completes it" 1 "$([ -n "$FID3" ] && echo 1 || echo 0)"
+ok "  … byte for byte (3.3 MB through four 1 MB parts)" "$(SHA "$T/huge.zip")" "$(MOCKSHA "$FID3")"
+head -c 2500000 /dev/urandom > "$T/lost.zip"; S4=$(FMSTART "$T/lost.zip" "$CAMP" ""); TK4=$(echo "$S4" | jget token); P4=$(echo "$S4" | jget piece)
+echo lose > "$T/mock.json.fail"; FMSEND "$T/lost.zip" "$TK4" "$P4" > /dev/null; F4=$(FMFIN "$TK4"); echo "$F4" > "$T/last"; FID4=$(echo "$F4" | jget id)
+ok "a part Zoho stored but whose reply was lost is not sent twice" "$(SHA "$T/lost.zip")" "$(MOCKSHA "$FID4")"
+S5=$(FMSTART "$T/small.psd" "$CAMP" ""); FMSEND "$T/small.psd" "$(echo "$S5" | jget token)" "$(echo "$S5" | jget piece)" > /dev/null; FID5=$(FMFIN "$(echo "$S5" | jget token)" | jget id)
+ok "same name twice in one folder: both are kept" 1 "$([ -n "$FID5" ] && [ "$FID5" != "$FID1" ] && [ "$(MOCKNAME "$FID5")" != "small.psd" ] && echo 1 || echo 0)"
+echo '<?php echo 1;' > "$T/x.php"; ok "a .php file is refused" 415 "$(curl -s -o /dev/null -w '%{http_code}' -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"client":"fmcli01","name":"x.php","size":12}' "$B/api/fmupload.php?action=start")"
+ok "upload into a folder of another client is refused" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"client":"fmcli01","folder":"OTHERFOLDER01","name":"a.png","size":12}' "$B/api/fmupload.php?action=start")"
+ok "someone else's upload cannot be continued" 404 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cj3" -c "$T/cj3" -X POST -H 'Content-Type: application/json' -d '{"email":"d2@x.com","password":"designer-pass-2"}' "$B/api/login.php" >/dev/null; curl -s -o /dev/null -w '%{http_code}' -b "$T/cj3" "$B/api/fmupload.php?action=status&token=$TK4")"
+ok "uploads are in the activity log" 1 "$([ "$(curl -s -b "$J" "$B/api/activity.php?action=file_uploaded&q=Shoot" | python3 -c "import sys,json;print(len(json.load(sys.stdin)['events']))")" -ge 1 ] && echo 1 || echo 0)"
+echo "file manager: rename and delete"
+ok "rename a file (its type is kept)" "poster.psd" "$(FMJ "{\"action\":\"rename\",\"client\":\"fmcli01\",\"name\":\"FM Client\",\"folder\":\"$CAMP\",\"id\":\"$FID1\",\"new_name\":\"poster\"}" >/dev/null; jget name < "$T/last")"
+ok "  … Zoho has the new name" "poster.psd" "$(MOCKNAME "$FID1")"
+ok "rename to a name already there is refused" 409 "$(FMJ "{\"action\":\"rename\",\"client\":\"fmcli01\",\"name\":\"FM Client\",\"folder\":\"$CAMP\",\"id\":\"$FID5\",\"new_name\":\"poster.psd\"}")"
+ok "an item from another folder cannot be renamed through this one" 404 "$(FMJ "{\"action\":\"rename\",\"client\":\"fmcli01\",\"name\":\"FM Client\",\"folder\":\"$CAMP\",\"id\":\"SECRETFILE001\",\"new_name\":\"x\"}")"
+SV "{\"action\":\"save\",\"base_version\":0,\"brand\":{\"id\":\"fmcli01\",\"name\":\"FM Client\",\"logos\":[{\"a\":\"api/download.php?id=$FID4\"}]}}" > /dev/null
+FMJ "{\"action\":\"trash\",\"client\":\"fmcli01\",\"name\":\"FM Client\",\"folder\":\"$CAMP\",\"ids\":[\"$FID1\",\"$FID4\",\"SECRETFILE001\"]}" > /dev/null
+ok "delete: the file goes to the WorkDrive trash" 1 "$(MOCKTRASHED "$FID1")"
+ok "  … a file the brand page uses is kept, with the reason" 1 "$(python3 -c "import json;r=json.load(open('$T/last'))['refused'];print(sum(1 for x in r if 'brand page' in x['why']))")"
+ok "  … and is not in the trash" 0 "$(MOCKTRASHED "$FID4")"
+ok "  … a file outside this folder is never touched" 0 "$(MOCKTRASHED SECRETFILE001)"
+DJ(){ curl -s -o "$T/last" -w '%{http_code}' -b "$T/cj3" -H "X-LH-CSRF: $(curl -s -b "$T/cj3" "$B/api/me.php" | jget csrf)" -X POST -H 'Content-Type: application/json' -d "$1" "$B/api/fm.php"; }
+DJ "{\"action\":\"trash\",\"client\":\"fmcli01\",\"name\":\"FM Client\",\"ids\":[\"$CAMP\"]}" > /dev/null
+ok "a designer cannot delete a folder" 0 "$(MOCKTRASHED "$CAMP")"
+ok "a designer can upload and browse" Campaigns "$(curl -s -b "$T/cj3" "$B/api/fm.php?client=fmcli01&name=FM%20Client" | python3 -c 'import sys,json;print([i["name"] for i in json.load(sys.stdin)["items"] if i["folder"]][0])')"
+FMJ "{\"action\":\"trash\",\"client\":\"fmcli01\",\"name\":\"FM Client\",\"ids\":[\"$CAMP\"]}" > /dev/null
+ok "the admin can delete a folder" 1 "$(MOCKTRASHED "$CAMP")"
+ok "  … opening it afterwards says it is gone" 404 "$(curl -s -o /dev/null -w '%{http_code}' -b "$J" "$B/api/fm.php?client=fmcli01&folder=$CAMP")"
 curl -s -b "$J" "$B/api/download.php?id=$FID" -o "$T/dl.jpg"; ok "download returns the stored (compressed) bytes" "$(echo "$U" | jget stored_bytes)" "$(wc -c < "$T/dl.jpg" | tr -d ' ')"
 ok "download of a file outside LatchHub -> 403" 403 "$(code "$B/api/download.php?id=SECRETFILE001")"
 ok "download with bad id -> 400" 400 "$(code "$B/api/download.php?id=../../etc/passwd")"

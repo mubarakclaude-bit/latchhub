@@ -1,6 +1,6 @@
 # LatchHub – test scenarios
 
-How to use: go down the list on the **live site**, mark ✔ / ✘ and note anything odd. **Auto** = already checked by the 130 automatic tests on every push (against a fake Zoho, not your real one), so on the live site you only need a quick confirmation. **Manual** = needs a person.
+How to use: go down the list on the **live site**, mark ✔ / ✘ and note anything odd. **Auto** = already checked by the 249 automatic tests on every push (against a fake Zoho, not your real one), so on the live site you only need a quick confirmation. **Manual** = needs a person.
 Use **two browsers** (or one normal + one private window) and, if possible, two computers: one for the admin, one for a designer.
 
 Priority: **P1** = must pass before the team relies on it · **P2** = should pass · **P3** = nice to know.
@@ -17,7 +17,7 @@ Priority: **P1** = must pass before the team relies on it · **P2** = should pas
 | A5 | Sign out, press the browser Back button | Still signed out; no client data shown | Manual | P1 |
 | A6 | Admin adds a designer; designer signs in | Designer sees all clients, no Admin link | Manual | P1 |
 | A7 | Admin switches a designer off while they are working | Their next save/upload is refused; they cannot sign in again | Manual | P1 |
-| A8 | Add a 5th designer (limit is 1 admin + 4 designers) | Refused with a clear message | Auto | P2 |
+| A8 | Add an 11th designer (limit is 1 admin + 10 designers) | Refused with a clear message | Auto | P2 |
 | A9 | Designer opens `/admin.html` | "Only the admin can use this page" | Auto | P1 |
 | A10 | Admin sets a new password for a designer | Old password stops working, new one works | Manual | P2 |
 | A11 | Leave a signed-in tab idle for 10+ hours | Asked to sign in again; no data lost | Manual | P3 |
@@ -202,3 +202,24 @@ Priority: **P1** = must pass before the team relies on it · **P2** = should pas
 6. **Browsers and screens:** L1, L2, L4.
 
 Record every ✘ with a screenshot and the text in the corner of the screen, and send it for fixing.
+
+## Q. Files section (file manager in Zoho)
+| # | Scenario | Expected | Auto? | P |
+|---|---|---|---|---|
+| Q1 | Admin → Zoho & system → Run upload test | Every step ✓, including *Large-file route* | Manual | P1 |
+| Q2 | Open a client → Files | The client's WorkDrive folder, the same as in WorkDrive (also files added by hand there) | Auto (server) + Manual | P1 |
+| Q3 | New folder, open it, breadcrumb back | Works; a second folder with the same name is refused | Auto + Manual | P1 |
+| Q4 | Upload a 20 MB, a 400 MB and a 1.5 GB file at once | Two at a time, progress and time left in the corner; all three arrive in WorkDrive at the right size | Auto (small sizes) + Manual | P1 |
+| Q5 | During the 1.5 GB upload: turn Wi-Fi off for 30 s, then on | "connection problem – trying again…", then it continues from where it was (not from 0) | Auto + Manual | P1 |
+| Q6 | Pause, wait, continue | Continues from where it was | Manual | P2 |
+| Q7 | Reload the page during a big upload, then choose the same file again | "interrupted" note in the corner; continues from where it stopped | Auto (server) + Manual | P2 |
+| Q8 | Drag a folder with sub-folders from Finder onto the section | Same folder structure in WorkDrive | Auto + Manual | P1 |
+| Q9 | Drop files onto a folder row | They go into that folder | Manual | P2 |
+| Q10 | Upload a file whose name already exists in the folder | Both kept (Zoho adds a date to the new one) | Auto | P2 |
+| Q11 | Rename a file to "final" | Becomes final.<same type> | Auto | P2 |
+| Q12 | Delete a file | Asks first; in the WorkDrive trash | Auto + Manual | P1 |
+| Q13 | Try to delete a logo file that the brand page uses | Not deleted, "used on the brand page" | Auto | P1 |
+| Q14 | A designer tries to delete a folder | No Delete button; refused by the server too | Auto | P1 |
+| Q15 | Upload a .exe or .php | Refused with the file type named | Auto | P2 |
+| Q16 | Download a 1 GB file | Download shows its size and progress | Auto (size) + Manual | P2 |
+| Q17 | Phone width | Buttons wrap, rows stack, no sideways scroll | Manual | P3 |

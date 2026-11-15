@@ -66,7 +66,7 @@ Effort: about a day, including testing. **This is the one item I would do before
 | S1 | Public files (see §1) | **High** | gate / move to Zoho |
 | S2 | No clickjacking protection, no HSTS, PHP version shown in a header (**Verified**) | Medium | add 3 header lines in `.htaccess` (X-Frame-Options, HSTS, hide X-Powered-By) |
 | S3 | No "change my password"; no 2-factor sign-in | Medium | self-service password change; 2-factor for the admin account later |
-| S4 | The Zoho key has `files.ALL` (includes permanent delete) although the app only needs create, read, update | Medium | regenerate the key with `CREATE,READ,UPDATE`; use a dedicated Zoho user that only sees the LatchHub folder, not a person's account |
+| S4 | The Zoho key has `files.ALL` (includes permanent delete) although the app only needs create, read, update | Medium | regenerate the key with `WorkDrive.files.CREATE,WorkDrive.files.READ,WorkDrive.files.UPDATE,ZohoFiles.files.CREATE,ZohoFiles.files.READ` (**correction:** the two ZohoFiles scopes are needed too – without them downloads fail with INVALID_OAUTHSCOPE; see ZOHO-SETUP.md "Zoho key permissions"); use a dedicated Zoho user that only sees the LatchHub folder, not a person's account |
 | S5 | Login lock-out counts by IP **or** email: an outsider can lock a designer out; one noisy office IP can lock everyone | Low | count the pair (IP + email) and slow down progressively |
 | S6 | No audit trail ("who changed this client?") | Low–Medium | keep the previous version of a client on every save (also gives undo) |
 | S7 | Login cookie is Secure + HttpOnly + SameSite (**Verified**), HTTPS redirect works (**Verified**), links must be http(s) (**Verified**), CSRF token on every write (**Verified**), SQL is parameterised | — | good as is |
