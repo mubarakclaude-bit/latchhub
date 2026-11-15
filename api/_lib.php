@@ -39,7 +39,7 @@ function pdo_connect(): PDO {
   return new PDO($d['dsn'] ?? ('mysql:host=' . $d['host'] . ';dbname=' . $d['name'] . ';charset=utf8mb4'), $d['user'] ?? null, $d['pass'] ?? null,
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
 }
-const LH_SCHEMA = 7;   /* bump when a table is added: installs created earlier are upgraded automatically on the next request */
+const LH_SCHEMA = 8;   /* bump when a table is added: installs created earlier are upgraded automatically on the next request */
 function ensure_schema_once(PDO $x): void {
   try { $r = $x->query("SELECT v FROM lh_kv WHERE k='schema'")->fetch(); if ($r && (int)$r['v'] >= LH_SCHEMA) return; } catch (Throwable $e) { /* lh_kv itself may be missing */ }
   ensure_schema($x);
@@ -70,6 +70,7 @@ function ensure_schema(?PDO $x = null): void {
   $x->exec("CREATE TABLE IF NOT EXISTS lh_deleted (id VARCHAR(40) PRIMARY KEY, name VARCHAR(190) NOT NULL, json LONGTEXT NOT NULL, folder_id VARCHAR(80) NOT NULL DEFAULT '', files LONGTEXT NOT NULL, deleted_by INT NOT NULL DEFAULT 0, deleted_at DATETIME NOT NULL)$tail");
   $x->exec("CREATE TABLE IF NOT EXISTS lh_activity (id $pk, at DATETIME NOT NULL, user_id INT NOT NULL DEFAULT 0, user_name VARCHAR(120) NOT NULL DEFAULT '', role VARCHAR(12) NOT NULL DEFAULT '', action VARCHAR(40) NOT NULL, client_id VARCHAR(40) NOT NULL DEFAULT '', client_name VARCHAR(190) NOT NULL DEFAULT '', details TEXT NOT NULL, ip VARCHAR(64) NOT NULL DEFAULT ''" . $ix('at') . $ix('user_id') . $ix('client_id') . $ix('action') . ")$tail");
   $x->exec("CREATE TABLE IF NOT EXISTS lh_pending (id $pk, zoho_id VARCHAR(80) NOT NULL, kind VARCHAR(12) NOT NULL, reason VARCHAR(255) NOT NULL, tries INT NOT NULL DEFAULT 0, created_at DATETIME NOT NULL)$tail");
+  $x->exec("CREATE TABLE IF NOT EXISTS lh_uploads (token VARCHAR(40) PRIMARY KEY, user_id INT NOT NULL, client_key VARCHAR(40) NOT NULL, client_name VARCHAR(190) NOT NULL DEFAULT '', folder_id VARCHAR(80) NOT NULL, rel_path VARCHAR(500) NOT NULL DEFAULT '', name VARCHAR(255) NOT NULL, size BIGINT NOT NULL, last_mod BIGINT NOT NULL DEFAULT 0, mode VARCHAR(8) NOT NULL, piece INT NOT NULL, chunk_size BIGINT NOT NULL DEFAULT 0, zoho_sent BIGINT NOT NULL DEFAULT 0, zoho_upload_id VARCHAR(190) NOT NULL DEFAULT '', state VARCHAR(10) NOT NULL DEFAULT 'open', file_id VARCHAR(80) NOT NULL DEFAULT '', error VARCHAR(300) NOT NULL DEFAULT '', created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL" . $ix('user_id') . ")$tail");
   $x->exec("CREATE TABLE IF NOT EXISTS lh_files (id $pk, zoho_id VARCHAR(80) NOT NULL, client_key VARCHAR(40) NOT NULL, name VARCHAR(255) NOT NULL, bytes BIGINT NOT NULL, orig_bytes BIGINT NOT NULL, method VARCHAR(40) NOT NULL, user_id INT NOT NULL, created_at DATETIME NOT NULL" . $ix('client_key') . ")$tail");
 }
 
@@ -143,7 +144,7 @@ function zoho_api(string $method, string $path, ?array $json = null, array $quer
   for ($try = 0; $try < 2; $try++) {
     $h = ['Authorization: Zoho-oauthtoken ' . zoho_token($try === 1), 'Accept: application/vnd.api+json'];
     if ($json !== null) $h[] = 'Content-Type: application/vnd.api+json';
-    [$st, $b] = http($method, $url, $h, $json !== null ? json_encode($json) : null);
+    [$st, $b] = http($method, $url, $h, $json !== null ? json_encode($json) : ($method === 'POST' ? '' : null));   /* an empty POST still says Content-Length: 0 */
     if ($st === 401 && $try === 0) continue;
     return [$st, json_decode($b, true) ?: [], $b];
   }
@@ -157,7 +158,7 @@ function norm_item(array $d): array {
   $a = $d['attributes'] ?? [];
   $size = $a['storage_info']['size_in_bytes'] ?? ($a['storage_info']['size'] ?? ($a['size'] ?? null));
   $isFolder = (($a['type'] ?? '') === 'folder') || !empty($a['is_folder']);
-  return ['id' => (string)($d['id'] ?? ''), 'name' => (string)($a['name'] ?? ($a['display_attr_name'] ?? '')), 'folder' => $isFolder, 'ext' => (string)($a['extn'] ?? ''), 'size' => is_numeric($size) ? (int)$size : null, 'modified' => (string)($a['modified_time'] ?? '')];
+  return ['id' => (string)($d['id'] ?? ''), 'name' => (string)($a['name'] ?? ($a['display_attr_name'] ?? '')), 'folder' => $isFolder, 'ext' => (string)($a['extn'] ?? ''), 'size' => is_numeric($size) ? (int)$size : null, 'modified' => (string)($a['modified_time'] ?? ''), 'modified_ms' => (int)($a['modified_time_in_millisecond'] ?? 0)];
 }
 function zoho_list(string $folderId, int $cap = 500): array {
   $items = [];
@@ -240,9 +241,9 @@ function client_folder(string $key, string $name, bool $create = true): ?string 
   return $id;
 }
 /* "Brand assets/Logos" -> the (nested) folder inside $parentId, created on the way when $create is true */
-function ensure_path(string $parentId, string $path, bool $create = true): ?string {
+function ensure_path(string $parentId, string $path, bool $create = true, int $maxDepth = 4): ?string {
   $segs = array_values(array_filter(array_map(fn($x) => safe_name($x, ''), explode('/', str_replace('\\', '/', $path))), fn($x) => $x !== ''));
-  if (count($segs) > 4) out(400, ['error' => 'Folder path is too deep (4 levels at most).']);
+  if (count($segs) > $maxDepth) out(400, ['error' => 'Folder path is too deep (' . $maxDepth . ' levels at most).']);
   $cur = $parentId;
   foreach ($segs as $seg) {
     $key = 'p' . substr(md5($cur . '/' . strtolower($seg)), 0, 32);

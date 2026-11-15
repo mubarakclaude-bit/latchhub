@@ -1,4 +1,4 @@
 Options -Indexes
-<Files "_lib.php">
+<FilesMatch "^_">
   Require all denied
-</Files>
+</FilesMatch>

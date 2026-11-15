@@ -5,6 +5,6 @@
    (menu order = page order, logos only under Logos, colour cards under Colors, patterns under Elements,
    counts of colours/logos/fonts/elements/sub-brands match the data, no broken images, no sideways scroll).
 3. Look at: Home list (logos aligned, hover), Zari (sub-brands, colour reference, logos on colour), Kaynes (elements),
-   Solid Semi (empty brand), a sub-brand, Design Lens, Edit mode on, Settings menu (Backup / Restore / theme / New brand),
+   Solid Semi (empty brand), a sub-brand, the Files section (signed in: upload, folder, rename, the upload list in the corner), Design Lens, Edit mode on, Settings menu (Backup / Restore / theme / New brand),
    light + dark theme, and a phone width.
 4. Back-end files (`api/`, `serve.php`, `js/sync.js`, `lh-config*`, data json) must show no changes in `git diff --stat`.

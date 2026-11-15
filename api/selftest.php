@@ -36,4 +36,11 @@ if ($id2 !== '') {
   $gone = true; foreach (zoho_list($folder) as $it) { if ($it['id'] === $id2) $gone = false; }
   $step('Move a file to the WorkDrive trash (used when something is deleted in the app)', $tok && $gone, 'HTTP ' . $tcode . ($tok && $gone ? ', the file left the folder' : ($tok ? ', but the file is still listed' : ' – Zoho said: ' . substr(preg_replace('/\\s+/', ' ', $traw), 0, 200))));
 } else $step('Move a file to the WorkDrive trash (used when something is deleted in the app)', false, 'Could not create the second test file.');
+/* Files section: files over 250 MB go through Zoho's upload server (upload.zoho.in etc.) – prove this account may use it */
+require_once __DIR__ . '/_fm.php';
+$name3 = 'selftest-stream-' . date('His') . '.txt'; $tmp3 = tempnam(sys_get_temp_dir(), 'lhs'); file_put_contents($tmp3, 'stream upload test');
+[$s3, $r3, $j3] = zoho_stream_upload($folder, $tmp3, $name3, bin2hex(random_bytes(8))); @unlink($tmp3);
+$id3 = in_array($s3, [200, 201], true) ? (pick_id($j3) ?? zoho_find_id($folder, $name3)) : '';
+$step('Large-file route: upload through Zoho\'s upload server (' . parse_url(zoho_upload_host(), PHP_URL_HOST) . ')', $id3 !== '', 'HTTP ' . $s3 . ($id3 !== '' ? ', the file arrived – files over 250 MB will work' : ' – Zoho said: ' . substr(preg_replace('/\\s+/', ' ', $r3), 0, 200) . '. Files under 250 MB still work.'));
+if ($id3 !== '') zoho_trash($id3);
 $done();

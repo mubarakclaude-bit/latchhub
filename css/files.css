@@ -1,0 +1,50 @@
+/* LatchHub – Files section and the upload list (flat / square, same tokens as the rest of the app) */
+#s-files{position:relative}
+#s-files.fm-over:after{content:"Drop to upload into this folder";position:absolute;inset:12px;border:2px dashed var(--ink);background:color-mix(in srgb,var(--bg) 82%,transparent);display:flex;align-items:center;justify-content:center;font-size:13px;letter-spacing:.08em;text-transform:uppercase;pointer-events:none;z-index:5}
+.fm-bc{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 14px;font-size:13px}
+.fm-bc button{background:none;border:0;padding:0;color:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:3px;font:inherit}
+.fm-bc span{color:var(--mute)}.fm-ld{margin-left:8px;font-size:12px}
+.fm-list{border-top:1px solid var(--ink)}
+.fm-row{display:grid;grid-template-columns:44px minmax(0,1fr) auto 90px 110px 210px;align-items:center;gap:12px;padding:8px 4px;border-bottom:1px solid var(--line);min-height:44px}
+.fm-row.fm-head{min-height:0;padding:8px 4px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.fm-row.fm-head .fm-n{grid-column:2/4}
+.fm-row:not(.fm-head):hover{background:color-mix(in srgb,var(--ink) 4%,transparent)}
+.fm-row.drop{outline:2px solid var(--red);outline-offset:-2px}
+.fm-c0{display:flex;align-items:center;justify-content:center;width:40px;height:40px}
+.fm-th{width:40px;height:40px;object-fit:cover;border:1px solid var(--line);background:#fff}
+.fm-ico{display:flex;align-items:center;justify-content:center;width:36px;height:40px;border:1px solid var(--line2);font-size:9px;letter-spacing:.04em;font-weight:600;color:var(--mute);background:var(--bg)}
+.fm-ico.dir{width:38px;height:30px;border:0;background:var(--ink);clip-path:polygon(0 0,42% 0,52% 18%,100% 18%,100% 100%,0 100%)}
+.fm-n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:inherit;text-decoration:none;background:none;border:0;padding:0;font:inherit;text-align:left;cursor:pointer}
+a.fm-n:hover,button.fm-n:hover{text-decoration:underline;text-underline-offset:3px}
+.is-dir .fm-n{font-weight:600}
+.fm-tag{font-size:10px;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line2);padding:2px 6px;color:var(--mute);white-space:nowrap}
+.fm-row:not(:has(.fm-tag)) .fm-n{grid-column:2/4}
+.fm-sz,.fm-dt{font-size:12px;color:var(--mute);white-space:nowrap;text-align:right}
+.fm-act{display:flex;gap:6px;justify-content:flex-end;opacity:.35;transition:opacity .12s}
+.fm-row:hover .fm-act,.fm-act:focus-within{opacity:1}
+.fm-act a.btn{text-decoration:none}
+.fm-empty{border:1px dashed var(--line2);padding:36px 20px;display:flex;flex-direction:column;gap:6px;align-items:center;text-align:center;color:var(--mute)}
+.fm-empty b{color:var(--ink)}
+.fm-upn{font-size:12px;margin:10px 0 0}.fm-upn:empty{display:none}
+@media (hover:none){.fm-act{opacity:1}}
+@media (max-width:760px){
+  .fm-row{grid-template-columns:40px minmax(0,1fr) auto;gap:8px}
+  .fm-row.fm-head{display:none}
+  .fm-sz{grid-column:2;grid-row:2;text-align:left}.fm-dt{display:none}
+  .fm-act{grid-column:1/-1;justify-content:flex-start;opacity:1}
+  .fm-row .fm-n,.fm-row:not(:has(.fm-tag)) .fm-n{grid-column:2/4}
+}
+/* the upload list in the corner */
+#fm-tray{position:fixed;right:16px;bottom:16px;z-index:70;width:min(380px,calc(100vw - 32px));background:var(--bg);color:var(--ink);border:1px solid var(--ink);box-shadow:0 10px 30px rgba(0,0,0,.18);font-size:12.5px}
+.up-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;background:var(--ink);color:var(--bg);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.up-h button,.up-b button,.up-o button{background:none;border:1px solid currentColor;color:inherit;font:inherit;font-size:10.5px;padding:3px 8px;margin-left:6px;cursor:pointer;text-transform:uppercase;letter-spacing:.06em}
+.up-l{max-height:min(50vh,420px);overflow:auto}
+.up-r{padding:10px 12px;border-bottom:1px solid var(--line)}
+.up-t{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.up-t b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.up-b{display:flex;flex-shrink:0}.up-b button{margin-left:4px;border-color:var(--line2)}
+.up-p{height:4px;background:var(--line);margin:8px 0 6px}.up-p i{display:block;height:100%;background:var(--ink);transition:width .3s}
+.up-r.done .up-p i{background:var(--pass)}.up-r.error .up-p i{background:var(--fail)}
+.up-s{color:var(--mute)}.up-r.error .up-s{color:var(--fail)}.up-r.done .up-s{color:var(--pass)}
+.up-w{color:var(--mute);font-size:11px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.up-o{padding:10px 12px;background:var(--alt,#f1f1ef)}.up-o div{margin-top:8px}.up-o button{margin:0 6px 0 0}

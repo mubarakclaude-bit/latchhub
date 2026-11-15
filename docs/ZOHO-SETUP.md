@@ -72,8 +72,23 @@ If you see 200 instead, the host is ignoring `.htaccess` rewrite rules; tell the
 Renaming a client in the app also renames its folder in WorkDrive. If WorkDrive already has a folder with the new name, the app shows a warning and the old folder name stays (nothing is lost; files keep going to the same folder).
 
 ## Big files and partly failed uploads
-- Files over 12 MB are sent to the server in 6 MB pieces and put back together there, so no single request is too big for the host or its CDN (a request that arrives empty means a file was too big for one request).
+- (Brand page uploads – logos, fonts, brand books.) Files over 12 MB are sent to the server in 6 MB pieces and put back together there, so no single request is too big for the host or its CDN (a request that arrives empty means a file was too big for one request).
 - If one file of a client cannot be uploaded to Zoho, the **client is still saved for the whole team** (without that file). The corner of the screen shows "⚠ saved, but files not uploaded – click for details" with the file name, its size and the reason; the file stays in your browser and is retried when you click it or reload.
+
+## Files section (file manager for designers)
+Every client page has a **Files** section: the client's WorkDrive folder as it really is, including files added by hand in WorkDrive.
+- **Browse** folders (breadcrumb at the top), **upload files** or **a whole folder** (sub-folders are kept), **drag and drop** files or folders onto the section or onto a folder row, **new folder**, **rename** (the file type is kept), **download**, **delete** (to the WorkDrive trash, restorable there).
+- **Any size, no host limits.** The browser sends every file in 8 MB pieces; the server confirms each one. What happens next follows Zoho's own rules:
+  - up to 250 MB: the normal upload when the last piece arrives;
+  - 250 MB – 1 GB: Zoho's *Upload Large File* stream upload (via `upload.zoho.in`);
+  - over 1 GB: a Zoho *chunk upload session*. Every 64 MB (128 MB above 10 GB) part goes to Zoho as soon as it is complete, so the server never holds more than one part. Up to your WorkDrive plan's file limit (10 GB Starter, 250 GB Business).
+- **Resumable.** A dropped connection or a sleeping laptop just continues. Uploads can be paused. After a page reload the corner list says which uploads were interrupted; choose the same files again and they continue from where they stopped.
+- **Uploads run in the background** (list in the bottom-right corner, two files at a time) while you keep working. Leaving the page while uploads run asks for confirmation.
+- **Rules:** designers can upload, rename and delete files; only the admin can delete folders. Files that the brand page uses (logos, fonts, elements, brand book) are marked *On brand page* and cannot be deleted here; remove them on the brand page. The `Brand assets` and `Brand book` folders cannot be deleted from here.
+- Everything is in the activity log (uploads, new folders, renames, deletions).
+- **Check it once on the live site:** Admin → Zoho & system → *Run upload test*. The new step *Large-file route* must be ✓. If it fails, files under 250 MB still work; tell the developer what Zoho said.
+- Optional settings in `lh-config.php` (defaults shown): `'fm' => ['piece' => 8388608, 'max_gb' => 50]`. If Zoho's upload server for your region is not found automatically, add `'upload' => 'https://upload.zoho.in'` inside the `zoho` settings.
+- Unfinished uploads keep their pieces in `lh-cache/up` next to `lh-config.php` (at most 1 GB per file, or one 64/128 MB part for bigger files) and are cleaned up after 3 days without activity.
 
 ## Folders deleted by hand in WorkDrive
 The app remembers each client's Zoho folder. If someone deletes or trashes that folder (or a sub-folder) directly in WorkDrive, the next upload notices (it re-checks a remembered folder every few minutes, and retries once with fresh folders if an upload is refused) and creates a new folder with the client's name. Files that were inside the deleted folder are of course not copied back: restore them from the WorkDrive trash if you need them. Deleting a client in the app whose folder is already gone is clean (nothing stays in the queue).
