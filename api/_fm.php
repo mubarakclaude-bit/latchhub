@@ -14,6 +14,7 @@ declare(strict_types=1);
 */
 
 const FM_PIECE_MAX = 8 * 1048576;
+const FM_PARTS_AHEAD = 4;   /* over 1 GB: how many Zoho parts may wait on this server before the browser is asked to slow down */
 const FM_EXT = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'heic', 'heif', 'tif', 'tiff', 'bmp', 'avif', 'raw', 'cr2', 'cr3', 'nef', 'arw', 'dng',
   'pdf', 'ai', 'eps', 'psd', 'psb', 'indd', 'idml', 'aep', 'prproj', 'fig', 'sketch', 'xd', 'afdesign', 'afphoto', 'cdr',
   'mp4', 'm4v', 'mov', 'webm', 'avi', 'mkv', 'mp3', 'wav', 'aac', 'm4a', 'ttf', 'otf', 'woff', 'woff2',
@@ -77,30 +78,61 @@ function zoho_session_commit(string $uploadId, string $folderId, string $name): 
   return zoho_api('POST', '/uploadsession/commit', null, ['upload_id' => $uploadId, 'parent_id' => $folderId, 'file_name' => $name, 'name_conflict' => 'rename']);
 }
 
-/* ---------- where pieces wait on this server ---------- */
+/* ---------- where pieces wait on this server ----------
+ Each upload has a folder lh-cache/up/<token>/ with
+   got      one character per piece: 1 = arrived (pieces may arrive in any order, several at once)
+   part-N   the bytes of Zoho part N (files up to 1 GB: one part = the whole file)
+ Over 1 GB, a part is sent to Zoho as soon as all its pieces are here, and then deleted. */
 function fm_spool_base(): string {
   $cp = cfg_path();
   $b = ($cp ? dirname($cp) . '/lh-cache' : sys_get_temp_dir() . '/lh-chunks') . '/up';
   if (!is_dir($b)) @mkdir($b, 0700, true);
   return $b;
 }
-function fm_spool(string $token): string { return fm_spool_base() . '/' . $token; }
-function fm_buf_size(string $token): int { $f = fm_spool($token); clearstatcache(true, $f); return is_file($f) ? (int)filesize($f) : 0; }
+function fm_dir(string $token): string { $d = fm_spool_base() . '/' . $token; if (!is_dir($d)) @mkdir($d, 0700, true); return $d; }
+function fm_part_size(array $u): int { return $u['mode'] === 'chunk' ? (int)$u['chunk_size'] : (int)$u['size']; }
+function fm_npieces(array $u): int { return max(1, (int)ceil((int)$u['size'] / max(1, (int)$u['piece']))); }
+function fm_pieces_per_part(array $u): int { return max(1, intdiv(fm_part_size($u), (int)$u['piece'])); }
+function fm_nparts(array $u): int { return max(1, (int)ceil((int)$u['size'] / max(1, fm_part_size($u)))); }
+function fm_part_file(array $u, int $p): string { return fm_dir($u['token']) . '/part-' . $p; }
+function fm_part_len(array $u, int $p): int { $ps = fm_part_size($u); return (int)min($ps, (int)$u['size'] - $p * $ps); }
+function fm_got(array $u): string {
+  $f = fm_spool_base() . '/' . $u['token'] . '/got'; clearstatcache(true, $f);
+  $n = fm_npieces($u); $g = is_file($f) ? (string)file_get_contents($f) : '';
+  return strlen($g) === $n ? $g : str_pad(substr($g, 0, $n), $n, '0');
+}
+function fm_mark(array $u, int $idx): void {
+  $fh = fopen(fm_dir($u['token']) . '/got', 'c+'); if (!$fh) return;
+  flock($fh, LOCK_EX);
+  $n = fm_npieces($u); $g = (string)stream_get_contents($fh); $g = str_pad(substr($g, 0, $n), $n, '0'); $g[$idx] = '1';
+  ftruncate($fh, 0); rewind($fh); fwrite($fh, $g); fflush($fh); flock($fh, LOCK_UN); fclose($fh);
+}
+function fm_received(array $u): int {
+  if (in_array($u['state'], ['queued', 'done'], true)) return (int)$u['size'];
+  $g = fm_got($u); $n = strlen($g); $piece = (int)$u['piece'];
+  $b = substr_count($g, '1') * $piece;
+  if ($n > 0 && $g[$n - 1] === '1') $b -= $n * $piece - (int)$u['size'];
+  return $b;
+}
+function fm_part_complete(array $u, int $p, ?string $g = null): bool {
+  $g = $g ?? fm_got($u); $k = fm_pieces_per_part($u);
+  $seg = substr($g, $p * $k, $k);
+  return $seg !== '' && strpos($seg, '0') === false;
+}
 /* uploads nobody came back to for 3 days: remove their pieces (Zoho chunk sessions expire after about 7 days anyway) */
 function fm_cleanup_old(): void {
   if (mt_rand(1, 20) !== 1) return;
   try {
     $old = gmdate('Y-m-d H:i:s', time() - 3 * 86400);
     $st = db()->prepare("SELECT token FROM lh_uploads WHERE state='open' AND updated_at < ?"); $st->execute([$old]);
-    foreach ($st->fetchAll() as $r) { @unlink(fm_spool($r['token'])); db()->prepare("UPDATE lh_uploads SET state='expired' WHERE token=?")->execute([$r['token']]); }
-    db()->prepare("DELETE FROM lh_uploads WHERE state<>'open' AND updated_at < ?")->execute([gmdate('Y-m-d H:i:s', time() - 30 * 86400)]);
+    foreach ($st->fetchAll() as $r) { rrmdir(fm_spool_base() . '/' . $r['token']); db()->prepare("UPDATE lh_uploads SET state='expired' WHERE token=?")->execute([$r['token']]); }
+    db()->prepare("DELETE FROM lh_uploads WHERE state IN ('done','cancelled','expired') AND updated_at < ?")->execute([gmdate('Y-m-d H:i:s', time() - 30 * 86400)]);
   } catch (Throwable $e) { error_log('LatchHub fm cleanup: ' . $e->getMessage()); }
 }
-function fm_received(array $u): int { return (int)$u['zoho_sent'] + fm_buf_size($u['token']); }
+function fm_get(string $token): ?array { $st = db()->prepare('SELECT * FROM lh_uploads WHERE token=?'); $st->execute([$token]); return $st->fetch() ?: null; }
 function fm_load(string $token, array $user): array {
   if (!preg_match('/^[a-f0-9]{32}$/', $token)) out(400, ['error' => 'Bad upload id.']);
-  $st = db()->prepare('SELECT * FROM lh_uploads WHERE token=?'); $st->execute([$token]);
-  $u = $st->fetch();
+  $u = fm_get($token);
   if (!$u || (int)$u['user_id'] !== (int)$user['id']) out(404, ['error' => 'This upload is not known (it may have expired). Start it again.']);
   return $u;
 }
@@ -110,27 +142,100 @@ function fm_touch(string $token, array $set = []): void {
   db()->prepare('UPDATE lh_uploads SET ' . $cols . ' WHERE token=?')->execute(array_merge(array_values($set), [$token]));
 }
 function fm_state(array $u): array {
-  return ['token' => $u['token'], 'state' => $u['state'], 'received' => fm_received($u), 'size' => (int)$u['size'], 'piece' => (int)$u['piece'], 'mode' => $u['mode'], 'id' => $u['file_id'] ?: null, 'error' => $u['error'] ?: null];
+  $open = $u['state'] === 'open';
+  return ['token' => $u['token'], 'state' => $u['state'], 'received' => fm_received($u), 'size' => (int)$u['size'], 'piece' => (int)$u['piece'], 'mode' => $u['mode'],
+    'have' => $open ? fm_got($u) : null, 'id' => $u['file_id'] ?: null];
+}
+/* one worker at a time talks to Zoho for a given upload */
+function fm_worker_lock(string $token, bool $wait) { $fh = fopen(fm_spool_base() . '/.fwd-' . $token, 'c'); if (!$fh) return null; if (!flock($fh, $wait ? LOCK_EX : LOCK_EX | LOCK_NB)) { fclose($fh); return null; } return $fh; }
+function fm_worker_unlock($fh): void { if ($fh) { flock($fh, LOCK_UN); fclose($fh); } }
+
+/* over 1 GB: send every complete part that is next in line. Returns '' or the reason it stopped. */
+function fm_forward_ready(array &$u): string {
+  if ($u['mode'] !== 'chunk') return '';
+  $ps = fm_part_size($u); $n = fm_nparts($u);
+  while (true) {
+    if ((int)$u['zoho_sent'] >= (int)$u['size']) return '';   /* every part is in Zoho */
+    $p = intdiv((int)$u['zoho_sent'], $ps);
+    if ($p >= $n || !fm_part_complete($u, $p)) return '';
+    $len = fm_part_len($u, $p); $start = (int)$u['zoho_sent']; $file = fm_part_file($u, $p);
+    clearstatcache(true, $file);
+    if (!is_file($file) || filesize($file) < $len) return 'part ' . ($p + 1) . ' is incomplete on this server';
+    [$st, $raw] = zoho_session_chunk($u['zoho_upload_id'], $file, $start, $len, (int)$u['size']);
+    $ok = $st === 200;
+    if (!$ok) {   /* the part may have arrived although the reply was lost (e.g. "same chunk uploaded more than once"): ask Zoho how far it got */
+      [$pst, $pj] = zoho_session_progress($u['zoho_upload_id']);
+      $got = (int)($pj['received_bytes'] ?? ($pj['data']['attributes']['received_bytes'] ?? -1));
+      if ($pst === 200 && $got >= $start + $len) $ok = true;
+    }
+    if (!$ok) { $why = 'Zoho did not accept part ' . ($p + 1) . ' (HTTP ' . $st . ' ' . zoho_reason($raw) . ')'; error_log('LatchHub fm: ' . $why); return $why; }
+    @unlink($file);
+    $u['zoho_sent'] = $start + $len;
+    fm_touch($u['token'], ['zoho_sent' => $u['zoho_sent']]);
+  }
 }
 
-/* over 1 GB: when a whole Zoho part is waiting here, send it. Returns '' on success or the reason it failed. */
-function fm_forward_part(array &$u, bool $final): string {
-  $len = fm_buf_size($u['token']);
-  if ($len === 0) return '';
-  if (!$final && $len < (int)$u['chunk_size']) return '';
-  $start = (int)$u['zoho_sent'];
-  [$st, $raw] = zoho_session_chunk($u['zoho_upload_id'], fm_spool($u['token']), $start, $len, (int)$u['size']);
-  $ok = $st === 200;
-  if (!$ok) {   /* the part may have arrived although the reply was lost (e.g. "same chunk uploaded more than once"): ask Zoho how far it got */
-    [$ps, $pj] = zoho_session_progress($u['zoho_upload_id']);
-    $got = (int)($pj['received_bytes'] ?? ($pj['data']['attributes']['received_bytes'] ?? -1));
-    if ($ps === 200 && $got >= $start + $len) $ok = true;
-  }
-  if (!$ok) { $why = 'Zoho did not accept part ' . (intdiv($start, max(1, (int)$u['chunk_size'])) + 1) . ' (HTTP ' . $st . ' ' . zoho_reason($raw) . ')'; error_log('LatchHub fm: ' . $why); return $why; }
-  @unlink(fm_spool($u['token']));
-  $u['zoho_sent'] = $start + $len;
-  fm_touch($u['token'], ['zoho_sent' => $u['zoho_sent']]);
-  return '';
+/* every byte is here: deliver the file to Zoho. Returns true when it is in Zoho. Failures are kept for a later retry. */
+function fm_transfer(array $u, bool $wait = true): bool {
+  $lock = fm_worker_lock($u['token'], $wait);
+  if (!$lock) return false;
+  try {
+    $u = fm_get($u['token']) ?? $u;
+    if ($u['state'] === 'done') return true;
+    if ($u['state'] !== 'queued') return false;
+    $folder = $u['folder_id']; $name = $u['name']; $id = ''; $fail = '';
+    if ($u['mode'] === 'chunk') {
+      $fail = fm_forward_ready($u);
+      if ($fail === '' && (int)$u['zoho_sent'] < (int)$u['size']) $fail = 'not every part has reached Zoho yet';
+      if ($fail === '') {
+        [$s, $j, $raw] = zoho_session_commit($u['zoho_upload_id'], $folder, $name);
+        if ($s === 200) $id = pick_id($j) ?? '';
+        elseif ($s !== 412) $fail = 'Zoho did not complete the file (HTTP ' . $s . ' ' . zoho_reason($raw) . ')';   /* 412 = already completed: the earlier reply was lost */
+      }
+    } else {
+      $file = fm_part_file($u, 0);
+      if (!is_file($file)) $fail = 'the file is no longer on this server';
+      else {
+        [$s, $raw, $j] = $u['mode'] === 'single' ? zoho_upload($folder, $file, $name) : zoho_stream_upload($folder, $file, $name, $u['token']);
+        if (in_array($s, [200, 201], true)) $id = pick_id($j) ?? ''; else $fail = 'HTTP ' . $s . ' ' . zoho_reason($raw);
+      }
+    }
+    if ($fail === '' && $id === '') $id = zoho_find_id($folder, $name);   /* stored, but Zoho did not say its id: find it by name */
+    if ($fail === '' && $id === '') $fail = 'Zoho accepted the file but it did not appear in the folder';
+    if ($fail !== '') {
+      $a = (int)($u['attempts'] ?? 0) + 1;
+      fm_touch($u['token'], ['attempts' => $a, 'error' => substr($fail, 0, 300)]);
+      error_log('LatchHub fm transfer ' . $u['token'] . ' (attempt ' . $a . '): ' . $fail);
+      if ($a === 3) log_activity('client_error', ['id' => 0, 'name' => 'LatchHub (background)', 'role' => 'system'], ['client_id' => $u['client_key'], 'client_name' => $u['client_name'], 'details' => $name . ' is still not in Zoho after 3 tries (' . $fail . '). It is kept on the server and retried automatically.']);
+      return false;
+    }
+    fm_touch($u['token'], ['state' => 'done', 'file_id' => $id, 'error' => '']);
+    rrmdir(fm_spool_base() . '/' . $u['token']);
+    db()->prepare('INSERT INTO lh_files (zoho_id,client_key,name,bytes,orig_bytes,method,user_id,created_at) VALUES (?,?,?,?,?,?,?,?)')->execute([$id, $u['client_key'], $name, (int)$u['size'], (int)$u['size'], 'files-' . $u['mode'], (int)$u['user_id'], now()]);
+    $by = db()->prepare('SELECT id,name,role FROM lh_users WHERE id=?'); $by->execute([(int)$u['user_id']]);
+    $mb = (int)$u['size'] >= 1073741824 ? round((int)$u['size'] / 1073741824, 2) . ' GB' : round((int)$u['size'] / 1048576, 2) . ' MB';
+    log_activity('file_uploaded', $by->fetch() ?: ['id' => (int)$u['user_id'], 'name' => '?', 'role' => ''], ['client_id' => $u['client_key'], 'client_name' => $u['client_name'], 'details' => $name . ' · ' . $mb . ' · Files' . ($u['rel_path'] !== '' ? ' › ' . $u['rel_path'] : '')]);
+    return true;
+  } finally { fm_worker_unlock($lock); }
+}
+
+/* background delivery: files that are complete here but not yet in Zoho (and complete uploads whose browser went away before saying "finish").
+   Runs after answering requests, and from api/cron.php. */
+function fm_pump(int $max = 3, int $seconds = 120): int {
+  $t0 = time(); $n = 0;
+  try {
+    $rows = db()->query("SELECT * FROM lh_uploads WHERE state IN ('queued','open') ORDER BY updated_at LIMIT 50")->fetchAll();
+    foreach ($rows as $u) {
+      if ($n >= $max || time() - $t0 > $seconds) break;
+      $age = time() - (int)strtotime($u['updated_at'] . ' UTC');
+      if ($u['state'] === 'open') {
+        if ($age < fm_cfg('orphan_after', 120) || fm_received($u) !== (int)$u['size']) continue;   /* every piece arrived but nobody said finish */
+        fm_touch($u['token'], ['state' => 'queued']); $u['state'] = 'queued'; $age = 0;
+      } elseif ((int)$u['attempts'] > 0 && $age < min(3600, fm_cfg('retry_base', 60) * (int)$u['attempts'])) continue;   /* wait a little longer after each failed try */
+      if (fm_transfer($u, false)) $n++;
+    }
+  } catch (Throwable $e) { error_log('LatchHub fm pump: ' . $e->getMessage()); }
+  return $n;
 }
 
 /* ---------- folders: only folders inside the client's own Zoho folder may be listed or changed ---------- */

@@ -29,7 +29,14 @@ if ($trail === null) out(404, ['error' => 'This folder is no longer there (delet
 if (!$isPost) {
   $items = zoho_list($folder, 1000);
   usort($items, fn($a, $b) => [$b['folder'], strtolower($a['name'])] <=> [$a['folder'], strtolower($b['name'])]);
-  out(200, ['root' => $cf, 'folder' => $folder, 'trail' => $trail, 'items' => $items, 'more' => count($items) >= 1000, 'linked' => fm_brand_ids($key)]);
+  /* files that are complete on this server but still on their way to Zoho: shown (and downloadable) already */
+  $pq = db()->prepare("SELECT token,name,size,mode,updated_at FROM lh_uploads WHERE folder_id=? AND state='queued' ORDER BY name"); $pq->execute([$folder]);
+  foreach ($pq->fetchAll() as $p) $items[] = ['id' => 'up-' . $p['token'], 'name' => $p['name'], 'folder' => false, 'ext' => strtolower(pathinfo($p['name'], PATHINFO_EXTENSION)), 'size' => (int)$p['size'],
+    'modified' => substr($p['updated_at'], 0, 10), 'modified_ms' => (int)strtotime($p['updated_at'] . ' UTC') * 1000, 'pending' => true, 'dl' => $p['mode'] !== 'chunk' ? 'api/download.php?up=' . $p['token'] : null];
+  usort($items, fn($a, $b) => [$b['folder'], strtolower($a['name'])] <=> [$a['folder'], strtolower($b['name'])]);
+  $reply = ['root' => $cf, 'folder' => $folder, 'trail' => $trail, 'items' => $items, 'more' => count($items) >= 1000, 'linked' => fm_brand_ids($key)];
+  if (out_then_continue(200, $reply)) { fm_pump(2, 60); exit; }   /* use the moment after answering to deliver waiting files */
+  out(200, $reply);
 }
 
 $act = (string)($in['action'] ?? '');

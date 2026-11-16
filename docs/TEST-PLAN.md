@@ -1,6 +1,6 @@
 # LatchHub – test scenarios
 
-How to use: go down the list on the **live site**, mark ✔ / ✘ and note anything odd. **Auto** = already checked by the 249 automatic tests on every push (against a fake Zoho, not your real one), so on the live site you only need a quick confirmation. **Manual** = needs a person.
+How to use: go down the list on the **live site**, mark ✔ / ✘ and note anything odd. **Auto** = already checked by the 267 automatic tests on every push (against a fake Zoho, not your real one), so on the live site you only need a quick confirmation. **Manual** = needs a person.
 Use **two browsers** (or one normal + one private window) and, if possible, two computers: one for the admin, one for a designer.
 
 Priority: **P1** = must pass before the team relies on it · **P2** = should pass · **P3** = nice to know.
@@ -223,3 +223,5 @@ Record every ✘ with a screenshot and the text in the corner of the screen, and
 | Q15 | Upload a .exe or .php | Refused with the file type named | Auto | P2 |
 | Q16 | Download a 1 GB file | Download shows its size and progress | Auto (size) + Manual | P2 |
 | Q17 | Phone width | Buttons wrap, rows stack, no sideways scroll | Manual | P3 |
+| Q18 | Upload a 400 MB file; when it says "✓ Uploaded", reload the folder at once and download the file | The file is listed and downloads at once (from our server while it is still on its way to Zoho); a minute later it is in WorkDrive | Auto + Manual | P1 |
+| Q19 | Admin health check after adding the cron job | "Background job" ✓, last ran a few minutes ago, 0 files waiting | Manual | P1 |

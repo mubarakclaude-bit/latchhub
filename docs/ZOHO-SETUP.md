@@ -100,6 +100,13 @@ Renaming a client in the app also renames its folder in WorkDrive. If WorkDrive 
 ## Files section (file manager for designers)
 Every client page has a **Files** section: the client's WorkDrive folder as it really is, including files added by hand in WorkDrive.
 - **Browse** folders (breadcrumb at the top), **upload files** or **a whole folder** (sub-folders are kept), **drag and drop** files or folders onto the section or onto a folder row, **new folder**, **rename** (the file type is kept), **download**, **delete** (to the WorkDrive trash, restorable there).
+- **Smooth for designers:** an upload is "✓ Uploaded" as soon as every byte is on our server. Delivering it to Zoho happens on the server afterwards, out of sight; the file is in the folder list (and downloadable) straight away. If Zoho is busy or down, the server keeps the file and retries automatically with growing pauses; after 3 failed tries a line appears in the activity log (Problems).
+- **Faster:** each file goes up three pieces at a time, two files side by side.
+- **Set up the background job once** (the safety net that delivers waiting files even when nobody has the site open): hPanel → Advanced → **Cron Jobs** → *Custom*, every 5 minutes (`*/5 * * * *`), command
+  ```
+  php /home/USERNAME/domains/latchinfinity.com/public_html/LatchHub/api/cron.php
+  ```
+  (USERNAME = your Hostinger user, shown in hPanel → Files → File Manager path). The health check on the admin page shows when it last ran.
 - **Any size, no host limits.** The browser sends every file in 8 MB pieces; the server confirms each one. What happens next follows Zoho's own rules:
   - up to 250 MB: the normal upload when the last piece arrives;
   - 250 MB – 1 GB: Zoho's *Upload Large File* stream upload (via `upload.zoho.in`);

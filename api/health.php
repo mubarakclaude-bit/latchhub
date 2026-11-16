@@ -21,5 +21,11 @@ $ok('Zoho sign-in (refresh token)', $t !== '');
 [$s, $j] = zoho_api('GET', '/files/' . rawurlencode($z['root_folder_id']));
 $ok('LatchHub folder readable', $s === 200, $s === 200 ? 'Folder name: ' . ($j['data']['attributes']['name'] ?? '?') : 'HTTP ' . $s . ' – check the folder id and that the Zoho user can open it.');
 if ($s === 200) { [$s2, $j2] = zoho_api('GET', '/files/' . rawurlencode($z['root_folder_id']) . '/files', null, ['page' => ['limit' => 5, 'offset' => 0]]); $ok('Folder listing', $s2 === 200, $s2 === 200 ? count($j2['data'] ?? []) . ' item(s) shown (first 5)' : 'HTTP ' . $s2); }
-$r['all_ok'] = !in_array(false, array_column(array_filter($r['checks'], fn($c) => !in_array($c['check'], ['JPEG orientation fix (exif)', 'PDF compression (Ghostscript)', 'Upload size limit (brand books need about 32M or more)'], true)), 'ok'), true);
+/* Files: uploads are delivered to Zoho in the background; the cron job is the safety net when nobody has the site open */
+try {
+  $cl = db()->query("SELECT v FROM lh_kv WHERE k='cron_last'")->fetch(); $w = db()->query("SELECT COUNT(*) c FROM lh_uploads WHERE state='queued'")->fetch();
+  $age = $cl ? time() - (int)strtotime((string)$cl['v']) : -1;
+  $ok('Background job (Files → Zoho safety net)', $cl && $age < 3600, ($cl ? 'last ran ' . ($age < 120 ? 'just now' : round($age / 60) . ' min ago') : 'has never run – add the cron job (docs/ZOHO-SETUP.md, "Files section")') . ' · ' . (int)$w['c'] . ' file(s) waiting to reach Zoho');
+} catch (Throwable $e) { $ok('Background job (Files → Zoho safety net)', false, 'could not read its status'); }
+$r['all_ok'] = !in_array(false, array_column(array_filter($r['checks'], fn($c) => !in_array($c['check'], ['JPEG orientation fix (exif)', 'PDF compression (Ghostscript)', 'Upload size limit (brand books need about 32M or more)', 'Background job (Files → Zoho safety net)'], true)), 'ok'), true);
 out(200, $r);

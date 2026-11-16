@@ -11,6 +11,20 @@ set_exception_handler(function (Throwable $e) {
   out(500, ['error' => 'Server error. If this is a new install, open the setup page first.']);
 });
 
+/* answer the browser now and keep working afterwards (LiteSpeed on Hostinger, or PHP-FPM). false = not possible here: do the work first, then answer. */
+function out_then_continue(int $code, array $data): bool {
+  $fin = function_exists('litespeed_finish_request') ? 'litespeed_finish_request' : (function_exists('fastcgi_finish_request') ? 'fastcgi_finish_request' : '');
+  if ($fin === '' || headers_sent()) return false;
+  ignore_user_abort(true); @set_time_limit(0);
+  if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+  $body = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  http_response_code($code);
+  header('Content-Type: application/json; charset=utf-8'); header('Cache-Control: no-store'); header('Content-Length: ' . strlen((string)$body)); header('Connection: close');
+  echo $body;
+  while (ob_get_level()) ob_end_flush();
+  flush(); $fin();
+  return true;
+}
 function out(int $code, array $data): void {
   http_response_code($code);
   header('Content-Type: application/json; charset=utf-8');
@@ -39,7 +53,7 @@ function pdo_connect(): PDO {
   return new PDO($d['dsn'] ?? ('mysql:host=' . $d['host'] . ';dbname=' . $d['name'] . ';charset=utf8mb4'), $d['user'] ?? null, $d['pass'] ?? null,
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
 }
-const LH_SCHEMA = 8;   /* bump when a table is added: installs created earlier are upgraded automatically on the next request */
+const LH_SCHEMA = 9;   /* bump when a table is added: installs created earlier are upgraded automatically on the next request */
 function ensure_schema_once(PDO $x): void {
   try { $r = $x->query("SELECT v FROM lh_kv WHERE k='schema'")->fetch(); if ($r && (int)$r['v'] >= LH_SCHEMA) return; } catch (Throwable $e) { /* lh_kv itself may be missing */ }
   ensure_schema($x);
@@ -71,6 +85,7 @@ function ensure_schema(?PDO $x = null): void {
   $x->exec("CREATE TABLE IF NOT EXISTS lh_activity (id $pk, at DATETIME NOT NULL, user_id INT NOT NULL DEFAULT 0, user_name VARCHAR(120) NOT NULL DEFAULT '', role VARCHAR(12) NOT NULL DEFAULT '', action VARCHAR(40) NOT NULL, client_id VARCHAR(40) NOT NULL DEFAULT '', client_name VARCHAR(190) NOT NULL DEFAULT '', details TEXT NOT NULL, ip VARCHAR(64) NOT NULL DEFAULT ''" . $ix('at') . $ix('user_id') . $ix('client_id') . $ix('action') . ")$tail");
   $x->exec("CREATE TABLE IF NOT EXISTS lh_pending (id $pk, zoho_id VARCHAR(80) NOT NULL, kind VARCHAR(12) NOT NULL, reason VARCHAR(255) NOT NULL, tries INT NOT NULL DEFAULT 0, created_at DATETIME NOT NULL)$tail");
   $x->exec("CREATE TABLE IF NOT EXISTS lh_uploads (token VARCHAR(40) PRIMARY KEY, user_id INT NOT NULL, client_key VARCHAR(40) NOT NULL, client_name VARCHAR(190) NOT NULL DEFAULT '', folder_id VARCHAR(80) NOT NULL, rel_path VARCHAR(500) NOT NULL DEFAULT '', name VARCHAR(255) NOT NULL, size BIGINT NOT NULL, last_mod BIGINT NOT NULL DEFAULT 0, mode VARCHAR(8) NOT NULL, piece INT NOT NULL, chunk_size BIGINT NOT NULL DEFAULT 0, zoho_sent BIGINT NOT NULL DEFAULT 0, zoho_upload_id VARCHAR(190) NOT NULL DEFAULT '', state VARCHAR(10) NOT NULL DEFAULT 'open', file_id VARCHAR(80) NOT NULL DEFAULT '', error VARCHAR(300) NOT NULL DEFAULT '', created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL" . $ix('user_id') . ")$tail");
+  try { $x->exec('ALTER TABLE lh_uploads ADD COLUMN attempts INT NOT NULL DEFAULT 0'); } catch (Throwable $e) { /* already there */ }
   $x->exec("CREATE TABLE IF NOT EXISTS lh_files (id $pk, zoho_id VARCHAR(80) NOT NULL, client_key VARCHAR(40) NOT NULL, name VARCHAR(255) NOT NULL, bytes BIGINT NOT NULL, orig_bytes BIGINT NOT NULL, method VARCHAR(40) NOT NULL, user_id INT NOT NULL, created_at DATETIME NOT NULL" . $ix('client_key') . ")$tail");
 }
 

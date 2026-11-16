@@ -48,3 +48,5 @@ a.fm-n:hover,button.fm-n:hover{text-decoration:underline;text-underline-offset:3
 .up-s{color:var(--mute)}.up-r.error .up-s{color:var(--fail)}.up-r.done .up-s{color:var(--pass)}
 .up-w{color:var(--mute);font-size:11px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .up-o{padding:10px 12px;background:var(--alt,#f1f1ef)}.up-o div{margin-top:8px}.up-o button{margin:0 6px 0 0}
+.fm-sync{display:inline-block;width:8px;height:8px;margin:0 6px;border:1.5px solid var(--mute);border-top-color:transparent;animation:fmspin 1s linear infinite;border-radius:50%!important;align-self:center}
+@keyframes fmspin{to{transform:rotate(360deg)}}

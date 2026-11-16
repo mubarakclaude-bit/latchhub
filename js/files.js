@@ -53,7 +53,8 @@ const FILES={
       if(e.data&&e.data.gone&&s.folder){toast('That folder is no longer in Zoho – back to the client folder',5000);s.loading=false;return this.load('')}
       if(s.items.length&&s.at&&!e.status){s.loading=false;s.at=Date.now();this.draw();toast('Could not refresh the file list (connection problem) – showing the last one',4000);return}   /* keep what we have: the network is only briefly away */
       s.error=e.message;s.at=Date.now()}
-    s.loading=false;this.draw()},
+    s.loading=false;this.draw();
+    clearTimeout(this.pt);if(s.items.some(i=>i.pending))this.pt=setTimeout(()=>{if(this.st.key===key&&document.getElementById('fm-box'))this.load()},15000)},
   draw(){
     const box=document.getElementById('fm-box');if(!box)return;const s=this.st,E=this.esc;
     const crumbs=[{id:'',name:s.client?s.client.name:'Client'}].concat(s.trail);
@@ -61,14 +62,14 @@ const FILES={
     if(s.error){box.innerHTML=bc+`<div class="none">Could not open this folder: ${E(s.error)} <button class="btn sm" data-f="refresh">Try again</button></div>`;return}
     const linked=new Set(s.linked),isAdmin=LHsync.role==='admin';
     const rows=s.items.map(it=>{
-      const ext=this.extOf(it),link=linked.has(it.id),dl='api/download.php?id='+encodeURIComponent(it.id);
-      const ico=it.folder?'<span class="fm-ico dir"></span>':(this.IMG.test(ext)&&it.size!=null&&it.size<6e6?`<img class="fm-th" loading="lazy" src="${dl}" alt="" onerror="this.outerHTML='<span class=&quot;fm-ico&quot;>${E(ext.toUpperCase())}</span>'">`:`<span class="fm-ico">${E((ext||'file').slice(0,4).toUpperCase())}</span>`);
+      const ext=this.extOf(it),link=linked.has(it.id),dl=it.pending?(it.dl||''):'api/download.php?id='+encodeURIComponent(it.id);
+      const ico=it.folder?'<span class="fm-ico dir"></span>':(!it.pending&&this.IMG.test(ext)&&it.size!=null&&it.size<6e6?`<img class="fm-th" loading="lazy" src="${dl}" alt="" onerror="this.outerHTML='<span class=&quot;fm-ico&quot;>${E(ext.toUpperCase())}</span>'">`:`<span class="fm-ico">${E((ext||'file').slice(0,4).toUpperCase())}</span>`);
       return`<div class="fm-row ${it.folder?'is-dir':''}" data-id="${E(it.id)}" data-name="${E(it.name)}">
         <span class="fm-c0">${ico}</span>
-        ${it.folder?`<button class="fm-n" data-f="open" data-id="${E(it.id)}">${E(it.name)}</button>`:`<a class="fm-n" href="${dl}" target="_blank" rel="noopener" title="Open">${E(it.name)}</a>`}
+        ${it.folder?`<button class="fm-n" data-f="open" data-id="${E(it.id)}">${E(it.name)}</button>`:(dl?`<a class="fm-n" href="${dl}" target="_blank" rel="noopener" title="Open">${E(it.name)}</a>`:`<span class="fm-n">${E(it.name)}</span>`)}
         ${link?'<span class="fm-tag" title="Shown on the brand page (logo, font, element or brand book). Remove it there.">On brand page</span>':''}
         <span class="fm-sz">${it.folder?'':this.size(it.size)}</span><span class="fm-dt">${E(this.when(it))}</span>
-        <span class="fm-act">${it.folder?'':`<a class="btn sm" href="${dl}&dl=1" download="${E(it.name)}" title="Download">⬇</a>`}<button class="btn sm" data-f="rename" data-id="${E(it.id)}">Rename</button>${link||(it.folder&&!isAdmin)?'':`<button class="btn sm del" data-f="del" data-id="${E(it.id)}">Delete</button>`}</span></div>`}).join('');
+        <span class="fm-act">${it.folder||!dl?'':`<a class="btn sm" href="${dl}&dl=1" download="${E(it.name)}" title="Download">⬇</a>`}${it.pending?'<span class="fm-sync" title="Just uploaded – available in a moment for renaming"></span>':`<button class="btn sm" data-f="rename" data-id="${E(it.id)}">Rename</button>${link||(it.folder&&!isAdmin)?'':`<button class="btn sm del" data-f="del" data-id="${E(it.id)}">Delete</button>`}`}</span></div>`}).join('');
     box.innerHTML=bc+(s.items.length?`<div class="fm-list"><div class="fm-row fm-head"><span class="fm-c0"></span><span class="fm-n">Name</span><span class="fm-sz">Size</span><span class="fm-dt">Modified</span><span class="fm-act"></span></div>${rows}</div>${s.more?'<p class="muted" style="font-size:12px">Showing the first 1000 items – open the folder in WorkDrive to see the rest.</p>':''}`
       :(s.loading?'':`<div class="fm-empty"><b>${s.folder?'This folder is empty.':'No files yet.'}</b><span>Drop files or whole folders here, or use <b>Upload files</b>. Any size – big files continue where they stopped if the connection drops.</span></div>`))
       +`<p class="muted fm-upn" id="fm-upn"></p>`;this.upNote()},
@@ -122,7 +123,7 @@ const UPL={
         /* starts go one after another, so files of one dropped folder never create the same new folder twice */
         const start=this.startChain.then(()=>FILES.api('fmupload.php?action=start',{client:u.client.id,client_name:u.client.name,folder:u.folder,path:u.rel,name:u.file.name,size:u.file.size,last_modified:u.file.lastModified||0}));
         this.startChain=start.catch(()=>{});
-        const j=await start;u.token=j.token;u.piece=j.piece;u.received=j.received||0;u.mode=j.mode;if(j.resumed)u.note='continued from '+FILES.size(u.received)}
+        const j=await start;u.token=j.token;u.piece=j.piece;u.received=j.received||0;u.mode=j.mode;u.have=j.have||'';if(j.resumed)u.note='continued from '+FILES.size(u.received)}
       if(u.state==='paused'||u.state==='cancelled')return;
       for(let i=0;i<4;i++){
         await this.send(u);
@@ -132,40 +133,50 @@ const UPL={
     this.draw()},
   wait(ms){return new Promise(r=>setTimeout(r,ms))},
   async online(){if(navigator.onLine!==false)return;await new Promise(r=>window.addEventListener('online',r,{once:true}))},
+  /* pieces go up three at a time, in any order; the server keeps a list of what it has ("have"), so a retry or a reload sends only what is missing */
+  PAR:3,
   async send(u){
     if(u.state==='paused'||u.state==='cancelled')return;
-    u.state='sending';u.t0=Date.now();u.b0=u.received;let fails=0;this.draw();
-    while(u.received<u.size){
-      if(u.state!=='sending')return;
-      const end=Math.min(u.size,u.received+u.piece),ac=new AbortController();u.ac=ac;
-      let r,j={};
-      try{r=await fetch('api/fmupload.php?action=piece&token='+u.token+'&offset='+u.received,{method:'POST',credentials:'same-origin',headers:{'X-LH-CSRF':LHsync.csrf,'Content-Type':'application/octet-stream'},body:u.file.slice(u.received,end),signal:ac.signal});try{j=await r.json()}catch{}}
-      catch(e){if(u.state!=='sending')return;r=null}
-      if(r&&r.ok){u.received=j.received;fails=0;const dt=(Date.now()-u.t0)/1000;if(dt>1)u.rate=(u.received-u.b0)/dt;this.draw();continue}
-      if(r&&r.status===409&&typeof j.received==='number'){u.received=j.received;continue}           /* server knows better where we are */
-      if(r&&r.status===401)throw new Error('You were signed out – sign in again in another tab, then press Retry');
-      if(r&&r.status>=400&&r.status<500)throw new Error(j.error||('Refused (HTTP '+r.status+')'));
-      if(r&&typeof j.received==='number')u.received=j.received;
-      if(++fails>8)throw new Error((j.error||'The connection keeps failing')+' – press Retry to continue from '+FILES.size(u.received));
-      u.note='connection problem – trying again…';this.draw();
-      await this.online();await this.wait(Math.min(30000,1000*2**fails));u.note='';
-    }},
+    u.state='sending';u.t0=Date.now();u.b0=u.received;this.draw();
+    const n=Math.ceil(u.size/u.piece),have=u.have&&u.have.length===n?u.have.split('').map(c=>c==='1'):new Array(n).fill(false);
+    const todo=[];for(let i=0;i<n;i++)if(!have[i])todo.push(i);
+    u.acs=new Set();let fails=0,fatal=null;
+    const one=async idx=>{
+      while(true){
+        if(u.state!=='sending'||fatal)return;
+        const off=idx*u.piece,ac=new AbortController();u.acs.add(ac);let r=null,j={};
+        try{r=await fetch('api/fmupload.php?action=piece&token='+u.token+'&offset='+off,{method:'POST',credentials:'same-origin',headers:{'X-LH-CSRF':LHsync.csrf,'Content-Type':'application/octet-stream'},body:u.file.slice(off,Math.min(u.size,off+u.piece)),signal:ac.signal});try{j=await r.json()}catch{}}
+        catch(e){r=null}
+        u.acs.delete(ac);
+        if(u.state!=='sending')return;
+        if(r&&r.ok){have[idx]=true;fails=0;u.received=Math.max(u.received,j.received||0);const dt=(Date.now()-u.t0)/1000;if(dt>1)u.rate=(u.received-u.b0)/dt;u.note='';this.draw();return}
+        if(r&&r.status===503){await this.wait(1000*(j.retry_after||5));continue}                         /* the server asks us to slow down a moment */
+        if(r&&r.status===401){fatal=new Error('You were signed out – sign in again in another tab, then press Retry');return}
+        if(r&&r.status===409){fatal=Object.assign(new Error(j.error||'Upload closed'),{closed:true});return}
+        if(r&&r.status>=400&&r.status<500){fatal=new Error(j.error||('Refused (HTTP '+r.status+')'));return}
+        if(++fails>12){fatal=new Error((j.error||'The connection keeps failing')+' – press Retry to continue where it stopped');return}
+        u.note='connection problem – trying again…';this.draw();
+        await this.online();await this.wait(Math.min(30000,800*2**Math.min(fails,6)))}};
+    const workers=[];for(let w=0;w<this.PAR;w++)workers.push((async()=>{while(todo.length&&u.state==='sending'&&!fatal)await one(todo.shift())})());
+    await Promise.all(workers);
+    u.have=have.map(x=>x?'1':'0').join('');
+    if(fatal&&!fatal.closed)throw fatal},
   async finish(u){
-    u.state='finishing';u.note=u.size>200e6?'Zoho is storing the file – this can take a few minutes':'';this.draw();
-    let j;
-    try{j=await FILES.api('fmupload.php?action=finish&token='+u.token,{})}
-    catch(e){
-      if(e.status===409&&e.data&&typeof e.data.received==='number'&&e.data.received<u.size){u.received=e.data.received;return'again'}   /* a piece is missing: send it, then finish */
-      if(e.status&&e.status<500)throw e;
-      if(e.status===502)throw e;                                    /* Zoho refused: pieces stay on the server, Retry finishes it */
-      for(let i=0;i<200;i++){await this.wait(4000);                 /* the reply was lost (timeout): the server keeps going – ask how it ended */
-        try{const s=await FILES.api('fmupload.php?action=status&token='+u.token);if(s.state==='done'){j={id:s.id};break}if(s.error)throw new Error(s.error)}catch(x){if(x.status)throw x}}
-      if(!j)throw new Error('No answer from the server – press Retry')}
-    u.state='done';u.note='';u.fileId=j.id;this.draw();
-    if(FILES.st.client&&FILES.st.client.id===u.client.id)clearTimeout(this.rt),this.rt=setTimeout(()=>FILES.load(),700)},
-  pause(u){if(/queued|starting|sending/.test(u.state)){u.state='paused';u.ac&&u.ac.abort();this.draw()}},
+    u.state='finishing';u.note='';this.draw();
+    let j=null;
+    for(let i=0;i<6&&!j;i++){
+      try{j=await FILES.api('fmupload.php?action=finish&token='+u.token,{})}
+      catch(e){
+        if(e.status===409&&e.data&&typeof e.data.have==='string'){u.have=e.data.have;u.received=e.data.received;return'again'}   /* a piece is missing: send it, then finish */
+        if(e.status===409&&e.data&&/done|queued/.test(e.data.state||'')){j=e.data;break}
+        if(e.status&&e.status<500)throw e;
+        await this.online();await this.wait(2000*(i+1))}}
+    if(!j)throw new Error('No answer from the server – press Retry');
+    u.state='done';u.note='';u.fileId=j.id||null;this.draw();   /* every byte is on our server: the designer is done, delivery to Zoho continues there */
+    if(FILES.st.client&&FILES.st.client.id===u.client.id)clearTimeout(this.rt),this.rt=setTimeout(()=>FILES.load(),500)},
+  pause(u){if(/queued|starting|sending/.test(u.state)){u.state='paused';u.acs&&u.acs.forEach(a=>a.abort());this.draw()}},
   resume(u){if(/paused|error/.test(u.state)){u.state='queued';u.err='';u.note='';this.pump();this.draw()}},
-  async cancel(u){const was=u.state;u.state='cancelled';u.ac&&u.ac.abort();if(u.token&&was!=='done')FILES.api('fmupload.php?action=cancel&token='+u.token,{}).catch(()=>{});this.items=this.items.filter(x=>x!==u);this.remember();this.draw()},
+  async cancel(u){const was=u.state;u.state='cancelled';u.acs&&u.acs.forEach(a=>a.abort());if(u.token&&was!=='done')FILES.api('fmupload.php?action=cancel&token='+u.token,{}).catch(()=>{});this.items=this.items.filter(x=>x!==u);this.remember();this.draw()},
   clearDone(){this.items=this.items.filter(u=>u.state!=='done');this.draw()},
   busy(){return this.items.some(u=>/queued|starting|sending|finishing/.test(u.state))},
   /* unfinished uploads survive a page reload: choose the same file again and it continues where it stopped */
@@ -187,7 +198,7 @@ const UPL={
     const rate=act.reduce((a,u)=>a+(u.state==='sending'?u.rate:0),0),rem=left.reduce((a,u)=>a+(u.size-u.received),0);
     const eta=s=>s<60?Math.max(1,Math.round(s))+' s':s<3600?Math.round(s/60)+' min':(s/3600).toFixed(1)+' h';
     const head=left.length?`Uploading ${left.length} file${left.length>1?'s':''}${rate>0?' · '+FILES.size(rate)+'/s · '+eta(rem/rate)+' left':''}`:(orph.length&&!this.items.length?'Interrupted uploads':`✓ ${done} upload${done>1?'s':''} done`);
-    const row=u=>{const pct=u.size?Math.floor(u.received/u.size*100):0,st={queued:'Waiting',starting:'Preparing…',sending:pct+'% · '+FILES.size(u.received)+' of '+FILES.size(u.size)+(u.rate>0?' · '+eta((u.size-u.received)/u.rate)+' left':''),finishing:'Saving in Zoho…',paused:'Paused · '+pct+'%',done:'✓ Saved in Zoho',error:'⚠ '+u.err}[u.state]||u.state;
+    const row=u=>{const pct=u.size?Math.floor(u.received/u.size*100):0,st={queued:'Waiting',starting:'Preparing…',sending:pct+'% · '+FILES.size(u.received)+' of '+FILES.size(u.size)+(u.rate>0?' · '+eta((u.size-u.received)/u.rate)+' left':''),finishing:'Finishing…',paused:'Paused · '+pct+'%',done:'✓ Uploaded',error:'⚠ '+u.err}[u.state]||u.state;
       return`<div class="up-r ${u.state}"><div class="up-t"><b title="${E(u.file.name)}">${E(u.file.name)}</b><span class="up-b">${/sending|paused|queued|starting/.test(u.state)?`<button data-u="${u.state==='paused'?'resume':'pause'}" data-id="${u.id}" title="${u.state==='paused'?'Continue':'Pause'}">${u.state==='paused'?'▶':'❚❚'}</button>`:''}${u.state==='error'?`<button data-u="resume" data-id="${u.id}">Retry</button>`:''}${u.state!=='done'?`<button data-u="cancel" data-id="${u.id}" title="Cancel">✕</button>`:''}</span></div>
         <div class="up-p"><i style="width:${u.state==='done'?100:pct}%"></i></div><div class="up-s">${E(st)}${u.note&&!/error|done/.test(u.state)?' · '+E(u.note):''}</div><div class="up-w">${E(u.label+(u.rel?' › '+u.rel.split('/').join(' › '):''))}</div></div>`};
     t.className=this.open?'':'min';
