@@ -6,6 +6,19 @@ require __DIR__ . '/_lib.php';
 require_method('GET');
 require_login();
 session_write_close();
+/* a file that is complete on this server but still on its way to Zoho: served from here, so nobody has to wait */
+if (isset($_GET['up'])) {
+  require __DIR__ . '/_fm.php';
+  $u = preg_match('/^[a-f0-9]{32}$/', (string)$_GET['up']) ? fm_get((string)$_GET['up']) : null;
+  if (!$u || $u['state'] === 'done') { if ($u && $u['file_id']) { header('Location: download.php?id=' . rawurlencode($u['file_id']) . (empty($_GET['dl']) ? '' : '&dl=1')); exit; } out(404, ['error' => 'File not found.']); }
+  $f = fm_spool_base() . '/' . $u['token'] . '/part-0';
+  if ($u['state'] !== 'queued' || $u['mode'] === 'chunk' || !is_file($f)) out(404, ['error' => 'This file is being saved – try again in a minute.']);
+  $nm = safe_name($u['name'], 'download');
+  header('Content-Type: application/octet-stream'); header('X-Content-Type-Options: nosniff'); header('Cache-Control: private, no-store');
+  header('Content-Disposition: attachment; filename="' . str_replace('"', '', $nm) . "\"; filename*=UTF-8''" . rawurlencode($nm));
+  header('Content-Length: ' . filesize($f));
+  @set_time_limit(0); while (ob_get_level()) ob_end_clean(); readfile($f); exit;
+}
 $id = (string)($_GET['id'] ?? '');
 if (!preg_match('/^[A-Za-z0-9]{10,80}$/', $id)) out(400, ['error' => 'Invalid file id.']);
 

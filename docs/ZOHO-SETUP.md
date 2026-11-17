@@ -1,6 +1,6 @@
 # LatchHub – Zoho WorkDrive + Hostinger setup
 
-What this does: the website talks to small PHP files in `api/`. They sign people in (1 admin + 10 designers), compress uploads, and store/fetch files in your WorkDrive folder. The Zoho keys live in one private file on the server – never in GitHub or in the website.
+What this does: the website talks to small PHP files in `api/`. They sign people in (the admin plus ten designers and project managers), compress uploads, and store/fetch files in your WorkDrive folder. The Zoho keys live in one private file on the server – never in GitHub or in the website.
 
 ## 1. Database (hPanel → Databases → MySQL Databases)
 Create a database and a user (any names). Note the **database name, user and password**.
@@ -48,6 +48,21 @@ Files that exist only on the server are left alone (nothing is deleted), and `lh
 
 ## 4. First admin
 Open `https://YOUR-DOMAIN/api/setup.php?token=YOUR_SETUP_TOKEN`, create the admin account. Then set `'setup_token' => ''` in `lh-config.php` to switch the page off.
+
+## Roles: who may do what
+| | Designer | Project manager (PM) | Admin |
+|---|---|---|---|
+| Add clients; edit every client in detail; upload and manage files | ✓ | ✓ | ✓ |
+| Delete a client, and folders in its Files | – | only clients the PM added | every client |
+| Add designers | – | ✓ (they join the PM's team) | ✓ (any role) |
+| Rename, new password, switch off/on | – | the designers in their team | everyone |
+| Dashboard (Overview, Activity, Team, Clients) | – | all designers' activity and their own; no IP addresses | everyone |
+| Roles, moving a designer to another PM, Zoho & system, backups, restoring deleted clients | – | – | ✓ |
+
+- Each client remembers who added it. Clients that existed before roles were introduced get their creator from the activity log; where that is unknown, only the admin can delete them.
+- Admin → Team: **Change role** on any card; **Project manager** on a designer's card puts them in a PM's team (or none). Changing a PM to another role takes their designers out of the team.
+- Designers and project managers share ten places (plus the admin).
+- All rules are in one place: `api/_lib.php`, "roles".
 
 ## 5. Check Zoho
 Open `https://YOUR-DOMAIN/admin.html`, sign in, press **Run health check**. Every required line should be ✓. Then add your designers under **Team → Add a person**.
@@ -100,6 +115,13 @@ Renaming a client in the app also renames its folder in WorkDrive. If WorkDrive 
 ## Files section (file manager for designers)
 Every client page has a **Files** section: the client's WorkDrive folder as it really is, including files added by hand in WorkDrive.
 - **Browse** folders (breadcrumb at the top), **upload files** or **a whole folder** (sub-folders are kept), **drag and drop** files or folders onto the section or onto a folder row, **new folder**, **rename** (the file type is kept), **download**, **delete** (to the WorkDrive trash, restorable there).
+- **Smooth for designers:** an upload is "✓ Uploaded" as soon as every byte is on our server. Delivering it to Zoho happens on the server afterwards, out of sight; the file is in the folder list (and downloadable) straight away. If Zoho is busy or down, the server keeps the file and retries automatically with growing pauses; after 3 failed tries a line appears in the activity log (Problems).
+- **Faster:** each file goes up three pieces at a time, two files side by side.
+- **Set up the background job once** (the safety net that delivers waiting files even when nobody has the site open): hPanel → Advanced → **Cron Jobs** → *Custom*, every 5 minutes (`*/5 * * * *`), command
+  ```
+  php /home/USERNAME/domains/latchinfinity.com/public_html/LatchHub/api/cron.php
+  ```
+  (USERNAME = your Hostinger user, shown in hPanel → Files → File Manager path). The health check on the admin page shows when it last ran.
 - **Any size, no host limits.** The browser sends every file in 8 MB pieces; the server confirms each one. What happens next follows Zoho's own rules:
   - up to 250 MB: the normal upload when the last piece arrives;
   - 250 MB – 1 GB: Zoho's *Upload Large File* stream upload (via `upload.zoho.in`);

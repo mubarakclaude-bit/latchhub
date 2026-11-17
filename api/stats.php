@@ -13,7 +13,7 @@ declare(strict_types=1);
 */
 require __DIR__ . '/_lib.php';
 require_method('GET');
-require_admin();
+$viewer = require_can('dashboard');
 session_write_close();
 $x = db();
 $days = max(1, min(400, (int)($_GET['days'] ?? 30)));
@@ -23,8 +23,10 @@ $from = $now - $days * 86400;
 $localDay = fn(int $ts) => gmdate('Y-m-d', $ts + $tz);
 
 /* ---- the clients themselves ---- */
-$users = [];
-foreach ($x->query('SELECT id,email,name,role,active,created_at FROM lh_users ORDER BY role, name')->fetchAll() as $u) $users[(int)$u['id']] = $u;
+$scope = activity_scope($viewer);   /* null = everyone (admin); a project manager: every designer and themselves */
+$inScope = fn(int $uid) => $scope === null || in_array($uid, $scope, true);
+$users = []; $allUsers = [];
+foreach ($x->query('SELECT id,email,name,role,active,created_at,manager_id FROM lh_users ORDER BY role, name')->fetchAll() as $u) { $allUsers[(int)$u['id']] = $u; if ($inScope((int)$u['id'])) $users[(int)$u['id']] = $u; }
 $plat = ['clients' => 0, 'subbrands' => 0, 'logos' => 0, 'colors' => 0, 'fonts' => 0, 'elements' => 0, 'books' => 0, 'links' => 0];
 $clients = [];
 foreach ($x->query('SELECT id,json,version,updated_by,updated_at FROM lh_brands ORDER BY name')->fetchAll() as $r) {
@@ -37,7 +39,7 @@ foreach ($x->query('SELECT id,json,version,updated_by,updated_at FROM lh_brands 
   $clients[$r['id']] = ['id' => $r['id'], 'name' => (string)($b['name'] ?? $r['id']), 'parent' => (string)($b['parent'] ?? ''),
     'logos' => $n('logos'), 'colors' => $n('colors'), 'fonts' => $n('fonts'), 'elements' => $n('elements'), 'links' => $n('links'), 'book' => !empty($b['book']),
     'swatch' => array_slice(array_values(array_filter(array_map(fn($c) => is_array($c) ? (string)($c['hex'] ?? '') : '', is_array($b['colors'] ?? null) ? $b['colors'] : []))), 0, 8),
-    'version' => (int)$r['version'], 'updated_at' => $r['updated_at'], 'updated_by' => $users[(int)$r['updated_by']]['name'] ?? '',
+    'version' => (int)$r['version'], 'updated_at' => $r['updated_at'], 'updated_by' => $allUsers[(int)$r['updated_by']]['name'] ?? '',
     'events' => 0, 'downloads' => 0, 'views' => 0, 'changes' => 0, 'files' => 0, 'bytes' => 0];
 }
 $plat['people_active'] = count(array_filter($users, fn($u) => (int)$u['active'] === 1));
@@ -55,7 +57,8 @@ foreach ($x->query("SELECT client_key, COUNT(*) n, COALESCE(SUM(bytes),0) b FROM
 $cats = array_keys(LH_CATS);
 $zero = array_fill_keys($cats, 0);
 $totals = $zero; $prev = $zero;
-$pv = $x->prepare('SELECT action, COUNT(*) n FROM lh_activity WHERE at >= ? AND at < ? GROUP BY action');
+$sw = $scope === null ? '' : ' AND user_id IN (' . implode(',', $scope) . ')';   /* integers only */
+$pv = $x->prepare('SELECT action, COUNT(*) n FROM lh_activity WHERE at >= ? AND at < ?' . $sw . ' GROUP BY action');
 $pv->execute([gmdate('Y-m-d H:i:s', $from - $days * 86400), gmdate('Y-m-d H:i:s', $from)]);
 foreach ($pv->fetchAll() as $r) $prev[act_cat((string)$r['action'])] += (int)$r['n'];
 
@@ -67,7 +70,7 @@ $people = [];
 $assets = []; $actions = [];
 /* rows are read one at a time (not all into memory) so a year of activity stays light on shared hosting */
 @set_time_limit(60);
-$st = $x->prepare('SELECT at,user_id,action,client_id,client_name,SUBSTR(details,1,120) AS details FROM lh_activity WHERE at >= ? ORDER BY id DESC LIMIT 200000');
+$st = $x->prepare('SELECT at,user_id,action,client_id,client_name,SUBSTR(details,1,120) AS details FROM lh_activity WHERE at >= ?' . $sw . ' ORDER BY id DESC LIMIT 200000');
 $st->execute([gmdate('Y-m-d H:i:s', $from)]);
 while ($r = $st->fetch()) {
   $ts = strtotime($r['at'] . ' UTC'); if ($ts === false) continue;
@@ -99,16 +102,18 @@ foreach ($users as $id => $u) {
   $p = $people[$id] ?? ['cats' => $zero, 'total' => 0, 'days' => [], 'clients' => [], 'last_at' => null];
   arsort($p['clients']);
   $series = []; foreach (array_keys($daily) as $d) $series[] = $p['days'][$d] ?? 0;
+  $mid = (int)($u['manager_id'] ?? 0);
   $pOut[] = ['id' => $id, 'name' => $u['name'], 'email' => $u['email'], 'role' => $u['role'], 'active' => (int)$u['active'] === 1, 'created_at' => $u['created_at'],
+    'manager_id' => $mid, 'manager_name' => $mid && isset($allUsers[$mid]) ? $allUsers[$mid]['name'] : '', 'manageable' => manages($viewer, $u),
     'total' => $p['total'], 'cats' => $p['cats'], 'days_active' => count($p['days']), 'series' => $series,
     'top_clients' => array_slice(array_map(fn($k, $v) => ['name' => (string)$k, 'n' => $v], array_keys($p['clients']), $p['clients']), 0, 3), 'last_in_period' => $p['last_at']];
 }
-$last = []; foreach ($x->query('SELECT user_id, MAX(at) last_at FROM lh_activity WHERE user_id > 0 GROUP BY user_id')->fetchAll() as $r) $last[(int)$r['user_id']] = $r['last_at'];
+$last = []; foreach ($x->query('SELECT user_id, MAX(at) last_at FROM lh_activity WHERE user_id > 0' . $sw . ' GROUP BY user_id')->fetchAll() as $r) $last[(int)$r['user_id']] = $r['last_at'];
 foreach ($pOut as &$p) $p['last_at'] = $last[$p['id']] ?? null;
 unset($p);
 usort($assets, fn($a, $b) => $b['n'] <=> $a['n']);
 arsort($actions);
-$recent = $x->query('SELECT id,at,user_id,user_name,role,action,client_id,client_name,details FROM lh_activity ORDER BY id DESC LIMIT 14')->fetchAll();
+$recent = $x->query('SELECT id,at,user_id,user_name,role,action,client_id,client_name,details FROM lh_activity WHERE 1=1' . $sw . ' ORDER BY id DESC LIMIT 14')->fetchAll();
 foreach ($recent as &$r) $r['cat'] = act_cat((string)$r['action']);
 unset($r);
 out(200, [
@@ -120,4 +125,6 @@ out(200, [
   'top_assets' => array_slice($assets, 0, 10),
   'top_actions' => array_slice(array_map(fn($a, $n) => ['action' => (string)$a, 'cat' => act_cat((string)$a), 'n' => $n], array_keys($actions), $actions), 0, 12),
   'recent' => $recent,
+  'viewer' => ['id' => (int)$viewer['id'], 'role' => $viewer['role']],
+  'pms' => array_values(array_map(fn($u) => ['id' => (int)$u['id'], 'name' => $u['name']], array_filter($allUsers, fn($u) => $u['role'] === 'pm' && (int)$u['active'] === 1))),
 ]);

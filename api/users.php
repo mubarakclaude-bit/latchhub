@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
-/* Admin only: list people, add a designer, rename someone, reset a password, switch someone off/on. */
+/* People.
+   Admin: list everyone, add anyone (any role), change roles, move a designer to a project manager, rename, set passwords, switch off/on.
+   Project manager: adds designers (they belong to this project manager) and renames, sets passwords for and switches off/on their own designers. */
 require __DIR__ . '/_lib.php';
 $method = $_SERVER['REQUEST_METHOD'] ?? '';
 if ($method === 'GET') {
@@ -9,7 +11,8 @@ if ($method === 'GET') {
   out(200, ['users' => $rows]);
 }
 require_method('POST');
-$me = require_admin(true);
+$me = require_can('team', true);
+$isAdmin = $me['role'] === 'admin';
 $b = body_json();
 $act = (string)($b['action'] ?? '');
 $x = db();
@@ -17,20 +20,45 @@ $checkPw = function (string $p) { if (strlen($p) < 10) out(400, ['error' => 'Use
 if ($act === 'create') {
   $email = strtolower(trim((string)($b['email'] ?? '')));
   $name = clean_person_name((string)($b['name'] ?? ''));
-  $role = ($b['role'] ?? 'designer') === 'admin' ? 'admin' : 'designer';
+  $role = $isAdmin && isset(LH_ROLES[(string)($b['role'] ?? '')]) ? (string)$b['role'] : 'designer';   /* a project manager adds designers only */
+  $manager = $isAdmin ? (int)($b['manager'] ?? 0) : (int)$me['id'];
+  if ($role !== 'designer') $manager = 0;
+  if ($manager > 0) { $mq = $x->prepare("SELECT id FROM lh_users WHERE id=? AND role='pm'"); $mq->execute([$manager]); if (!$mq->fetch()) out(400, ['error' => 'That project manager does not exist.']); }
   if (!filter_var($email, FILTER_VALIDATE_EMAIL) || $name === '') out(400, ['error' => 'A valid email and a name are required.']);
   $checkPw((string)($b['password'] ?? ''));
-  $c = $x->prepare('SELECT COUNT(*) c FROM lh_users WHERE active=1');
+  $c = $x->prepare("SELECT COUNT(*) c FROM lh_users WHERE active=1 AND role<>'admin'");
   $c->execute();
-  if ($role === 'designer' && (int)$c->fetch()['c'] >= 11) out(400, ['error' => 'The team is set to one admin plus ten designers. Switch someone off first.']);
-  try { $x->prepare('INSERT INTO lh_users (email,name,role,pass_hash,active,created_at) VALUES (?,?,?,?,1,?)')->execute([$email, $name, $role, password_hash((string)$b['password'], PASSWORD_DEFAULT), now()]); }
+  if ($role !== 'admin' && (int)$c->fetch()['c'] >= 10) out(400, ['error' => 'The team has ten places for designers and project managers (plus the admin). Switch someone off first.']);
+  try { $x->prepare('INSERT INTO lh_users (email,name,role,pass_hash,active,created_at,manager_id) VALUES (?,?,?,?,1,?,?)')->execute([$email, $name, $role, password_hash((string)$b['password'], PASSWORD_DEFAULT), now(), $manager]); }
   catch (Throwable $e) { out(409, ['error' => 'That email already has an account.']); }
-  log_activity('user_created', $me, ['details' => $name . ' <' . $email . '> as ' . $role]);
+  log_activity('user_created', $me, ['details' => $name . ' <' . $email . '> as ' . strtolower(LH_ROLES[$role]) . ($manager ? ' (team of ' . ($manager === (int)$me['id'] ? $me['name'] : '#' . $manager) . ')' : '')]);
   out(200, ['ok' => true]);
 }
 $id = (int)($b['id'] ?? 0);
 if ($id < 1) out(400, ['error' => 'Missing user id.']);
-$tu = $x->prepare('SELECT name,email FROM lh_users WHERE id=?'); $tu->execute([$id]); $target = $tu->fetch() ?: ['name' => '?', 'email' => '?'];
+$tu = $x->prepare('SELECT name,email,role,manager_id FROM lh_users WHERE id=?'); $tu->execute([$id]); $target = $tu->fetch() ?: ['name' => '?', 'email' => '?', 'role' => '', 'manager_id' => 0];
+if (in_array($act, ['role', 'manager'], true) && !$isAdmin) out(403, ['error' => 'Only the admin can change roles and teams.']);
+if (in_array($act, ['rename', 'password', 'active'], true) && !manages($me, $target)) out(403, ['error' => 'You can manage only the designers in your team.']);
+if ($act === 'manager') {   /* admin: which project manager a designer belongs to (0 = none) */
+  $m = (int)($b['manager'] ?? 0);
+  if ($target['role'] !== 'designer') out(400, ['error' => 'Only designers belong to a project manager.']);
+  $mn = '';
+  if ($m > 0) { $mq = $x->prepare("SELECT name FROM lh_users WHERE id=? AND role='pm'"); $mq->execute([$m]); $mr = $mq->fetch(); if (!$mr) out(400, ['error' => 'That project manager does not exist.']); $mn = $mr['name']; }
+  $x->prepare('UPDATE lh_users SET manager_id=? WHERE id=?')->execute([$m, $id]);
+  log_activity('user_team_changed', $me, ['details' => $target['name'] . ' <' . $target['email'] . '>: ' . ($m ? 'now in the team of ' . $mn : 'no project manager')]);
+  out(200, ['ok' => true]);
+}
+if ($act === 'role') {
+  $role = (string)($b['role'] ?? '');
+  if (!isset(LH_ROLES[$role])) out(400, ['error' => 'Unknown role.']);
+  if ($id === (int)$me['id']) out(400, ['error' => 'You cannot change your own role.']);
+  if ($target['role'] === '') out(404, ['error' => 'No such person.']);
+  if ($target['role'] === $role) out(200, ['ok' => true, 'role' => $role]);
+  $x->prepare('UPDATE lh_users SET role=?' . ($role !== 'designer' ? ', manager_id=0' : '') . ' WHERE id=?')->execute([$role, $id]);
+  if ($target['role'] === 'pm' && $role !== 'pm') $x->prepare('UPDATE lh_users SET manager_id=0 WHERE manager_id=?')->execute([$id]);   /* their designers no longer have a project manager */
+  log_activity('user_role_changed', $me, ['details' => $target['name'] . ' <' . $target['email'] . '>: ' . strtolower(LH_ROLES[$target['role']] ?? $target['role']) . ' → ' . strtolower(LH_ROLES[$role])]);
+  out(200, ['ok' => true, 'role' => $role]);
+}
 if ($act === 'rename') {
   $name = clean_person_name((string)($b['name'] ?? ''));
   if ($name === '') out(400, ['error' => 'Type a name (1–60 characters).']);

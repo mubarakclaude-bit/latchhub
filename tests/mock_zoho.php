@@ -39,6 +39,7 @@ if ($path === '/workdrive/api/v1/files' && $m === 'POST') {
 }
 $uniq = function ($parent, $name) use (&$st) { foreach ($st['files'] as $f) { if ($f['parent'] === $parent && empty($f['trashed']) && $f['name'] === $name) { $i = pathinfo($name); return $i['filename'] . '_' . date('YmdHis') . (isset($i['extension']) ? '.' . $i['extension'] : ''); } } return $name; };
 if ($path === '/workdrive/api/v1/upload' && $m === 'POST') {
+  $fl = $stateFile . '.fail'; if (is_file($fl) && trim((string)file_get_contents($fl)) === 'reject') { @unlink($fl); $j(['errors' => [['id' => 'F500', 'title' => 'Temporary failure']]], 500); }
   $f = $_FILES['content'] ?? null; if (!$f || !isset($st['files'][$_POST['parent_id'] ?? '']) || !empty($st['files'][$_POST['parent_id']]['trashed'])) $j(['errors' => [['id' => 'F6014', 'title' => 'Parent folder not found']]], 400);
   $id = 'NEWFILE' . (++$st['n']) . '0000'; $nm0 = urldecode($_POST['filename'] ?? $f['name']); if (($_POST['override-name-exist'] ?? 'false') === 'false') $nm0 = $uniq($_POST['parent_id'], $nm0);   /* like Zoho: a name already there gets a timestamp */
   $st['files'][$id] = ['name' => $nm0, 'parent' => $_POST['parent_id'], 'folder' => false, 'data' => base64_encode(file_get_contents($f['tmp_name']))];
@@ -60,6 +61,7 @@ if ($path === '/workdrive/api/v1/uploadsession/create' && $m === 'POST') {
 if ($path === '/workdrive/api/v1/uploadsession' && $m === 'GET') { $id = (string)($_GET['upload_id'] ?? ''); isset($st['sessions'][$id]) ? $j($sess($id)) : $j(['errors' => [['id' => 'D9232', 'title' => 'Invalid upload ID']]], 404); }
 if ($path === '/workdrive/api/v1/uploadsession/commit' && $m === 'POST') {
   $id = (string)($_GET['upload_id'] ?? ''); if (!isset($st['sessions'][$id])) $j(['errors' => [['id' => 'D9232', 'title' => 'Invalid upload ID']]], 404);
+  if (is_file($failFlag) && trim((string)file_get_contents($failFlag)) === 'reject') { @unlink($failFlag); $j(['errors' => [['id' => 'D9200', 'title' => 'Temporary failure']]], 500); }
   $s = &$st['sessions'][$id];
   if ($s['done'] || strlen(base64_decode($s['data'])) !== $s['size']) $j(['errors' => [['id' => 'D9231', 'title' => 'Upload session has already been completed or chunks are yet to be uploaded']]], 412);
   $fid = 'BIGFILE' . (++$st['n']) . '0000'; $nm = $uniq($s['parent'], (string)($_GET['file_name'] ?? $s['name']));

@@ -5,7 +5,7 @@ declare(strict_types=1);
  GET                                   -> { brands: [ {id, version, brand} ] }
  POST {action:"save", brand, base_version}   create (base_version 0) or update; refuses (409) if someone saved a newer version first
  GET ?deleted=1                        admin: deleted clients that can still be restored
- POST {action:"delete", id}                  admin only; the client's Zoho folder moves to the WorkDrive trash (recoverable)
+ POST {action:"delete", id}                  the admin, or the project manager who added the client; the client's Zoho folder moves to the WorkDrive trash (recoverable)
  POST {action:"restore", id}                 admin only; brings a deleted client and its Zoho folder back
  A save also moves to the trash any Zoho file that the record no longer links to (a removed logo, element, font or replaced brand book).
 */
@@ -24,7 +24,7 @@ if ($method === 'GET' && !empty($_GET['deleted'])) {
 if ($method === 'GET') {
   require_login();
   $out = [];
-  foreach ($x->query('SELECT id,json,version FROM lh_brands ORDER BY name')->fetchAll() as $r) $out[] = ['id' => $r['id'], 'version' => (int)$r['version'], 'brand' => json_decode($r['json'], true)];
+  foreach ($x->query('SELECT id,json,version,created_by FROM lh_brands ORDER BY name')->fetchAll() as $r) $out[] = ['id' => $r['id'], 'version' => (int)$r['version'], 'created_by' => (int)$r['created_by'], 'brand' => json_decode($r['json'], true)];
   out(200, ['brands' => $out]);
 }
 require_method('POST');
@@ -52,17 +52,17 @@ if ($act === 'restore') {
   foreach (json_decode($d['files'], true) ?: [] as $f) {
     $x->prepare('INSERT INTO lh_files (zoho_id,client_key,name,bytes,orig_bytes,method,user_id,created_at) VALUES (?,?,?,?,?,?,?,?)')->execute([$f['zoho_id'], $id, $f['name'], (int)$f['bytes'], (int)$f['orig_bytes'], (string)$f['method'], (int)$f['user_id'], $f['created_at']]);
   }
-  try { $x->prepare('INSERT INTO lh_brands (id,name,json,version,updated_by,updated_at) VALUES (?,?,?,1,?,?)')->execute([$id, $d['name'], $d['json'], (int)$user['id'], now()]); }
+  try { $x->prepare('INSERT INTO lh_brands (id,name,json,version,updated_by,updated_at,created_by) VALUES (?,?,?,1,?,?,?)')->execute([$id, $d['name'], $d['json'], (int)$user['id'], now(), (int)($d['created_by'] ?? 0)]); }
   catch (PDOException $e) { out(409, ['error' => 'A client with that id already exists.']); }
   $x->prepare('DELETE FROM lh_deleted WHERE id=?')->execute([$id]);
   log_activity('client_restored', $user, ['client_id' => $id, 'client_name' => $d['name'], 'details' => 'Client and its Zoho folder restored']);
   out(200, ['ok' => true]);
 }
 if ($act === 'delete') {
-  require_admin(true);
   $id = (string)($b['id'] ?? '');
   if (!valid_client_key($id)) out(400, ['error' => 'Invalid brand id.']);
-  $old = $x->prepare('SELECT json FROM lh_brands WHERE id=?');
+  if (!can_delete_in_client($user, $id)) out(403, ['error' => $user['role'] === 'pm' ? 'You can delete only the clients you added. Ask the admin for this one.' : 'Only the admin, or the project manager who added this client, can delete it.']);
+  $old = $x->prepare('SELECT json,created_by FROM lh_brands WHERE id=?');
   $old->execute([$id]);
   $row = $old->fetch();
   $fo = $x->prepare('SELECT zoho_id FROM lh_folders WHERE client_key=?');
@@ -70,7 +70,7 @@ if ($act === 'delete') {
   $f = $fo->fetch();
   $fl0 = $x->prepare('SELECT zoho_id,name,bytes,orig_bytes,method,user_id,created_at FROM lh_files WHERE client_key=?');
   $fl0->execute([$id]);
-  if ($row) $x->prepare('REPLACE INTO lh_deleted (id,name,json,folder_id,files,deleted_by,deleted_at) VALUES (?,?,?,?,?,?,?)')->execute([$id, (string)(json_decode($row['json'], true)['name'] ?? $id), $row['json'], $f ? $f['zoho_id'] : '', json_encode($fl0->fetchAll()), (int)$user['id'], now()]);
+  if ($row) $x->prepare('REPLACE INTO lh_deleted (id,name,json,folder_id,files,deleted_by,deleted_at,created_by) VALUES (?,?,?,?,?,?,?,' . (int)$row['created_by'] . ')')->execute([$id, (string)(json_decode($row['json'], true)['name'] ?? $id), $row['json'], $f ? $f['zoho_id'] : '', json_encode($fl0->fetchAll()), (int)$user['id'], now()]);
   $x->prepare('DELETE FROM lh_brands WHERE id=?')->execute([$id]);
   $res = ['ok' => true, 'trashed_folder' => false];
   if ($f) {
@@ -102,7 +102,7 @@ $id = (string)$brand['id'];
 $base = (int)($b['base_version'] ?? 0);
 $name = substr(trim((string)$brand['name']), 0, 190);
 if ($base === 0) {
-  try { $x->prepare('INSERT INTO lh_brands (id,name,json,version,updated_by,updated_at) VALUES (?,?,?,1,?,?)')->execute([$id, $name, $json, (int)$user['id'], now()]); log_activity('client_created', $user, ['client_id' => $id, 'client_name' => $name, 'details' => count($brand['logos'] ?? []) . ' logos, ' . count($brand['colors'] ?? []) . ' colours, ' . count($brand['fonts'] ?? []) . ' fonts' . (!empty($brand['book']) ? ', brand book' : '')]); out(200, ['ok' => true, 'version' => 1]); }
+  try { $x->prepare('INSERT INTO lh_brands (id,name,json,version,updated_by,updated_at,created_by) VALUES (?,?,?,1,?,?,?)')->execute([$id, $name, $json, (int)$user['id'], now(), (int)$user['id']]); log_activity('client_created', $user, ['client_id' => $id, 'client_name' => $name, 'details' => count($brand['logos'] ?? []) . ' logos, ' . count($brand['colors'] ?? []) . ' colours, ' . count($brand['fonts'] ?? []) . ' fonts' . (!empty($brand['book']) ? ', brand book' : '')]); out(200, ['ok' => true, 'version' => 1]); }
   catch (PDOException $e) { /* already exists: someone created it first */ }
 } else {
   $o = $x->prepare('SELECT json FROM lh_brands WHERE id=? AND version=?');

@@ -1,6 +1,6 @@
 # LatchHub – test scenarios
 
-How to use: go down the list on the **live site**, mark ✔ / ✘ and note anything odd. **Auto** = already checked by the 249 automatic tests on every push (against a fake Zoho, not your real one), so on the live site you only need a quick confirmation. **Manual** = needs a person.
+How to use: go down the list on the **live site**, mark ✔ / ✘ and note anything odd. **Auto** = already checked by the 311 automatic tests on every push (against a fake Zoho, not your real one), so on the live site you only need a quick confirmation. **Manual** = needs a person.
 Use **two browsers** (or one normal + one private window) and, if possible, two computers: one for the admin, one for a designer.
 
 Priority: **P1** = must pass before the team relies on it · **P2** = should pass · **P3** = nice to know.
@@ -17,7 +17,14 @@ Priority: **P1** = must pass before the team relies on it · **P2** = should pas
 | A5 | Sign out, press the browser Back button | Still signed out; no client data shown | Manual | P1 |
 | A6 | Admin adds a designer; designer signs in | Designer sees all clients, no Admin link | Manual | P1 |
 | A7 | Admin switches a designer off while they are working | Their next save/upload is refused; they cannot sign in again | Manual | P1 |
-| A8 | Add an 11th designer (limit is 1 admin + 10 designers) | Refused with a clear message | Auto | P2 |
+| A8 | Add an 11th designer or project manager (limit: the admin plus ten designers and project managers) | Refused with a clear message | Auto | P2 |
+| A13 | Admin adds a project manager (or uses Change role on a designer) | Card shows "Project manager"; the change is in the log | Auto + Manual | P1 |
+| A14 | PM adds a client, then deletes it; PM tries to delete a client someone else added | Own client: deleted. Other client: no Delete button, and the server refuses | Auto + Manual | P1 |
+| A15 | PM adds a designer, renames them, sets a new password, switches them off | All work; the designer shows "In the team of <PM>" | Auto + Manual | P1 |
+| A16 | PM tries to rename or set the password of a designer outside their team, or the admin | Refused; no buttons shown | Auto | P1 |
+| A17 | PM opens Dashboard → Activity | Designers' and their own actions only; no admin actions; no IP addresses | Auto + Manual | P1 |
+| A18 | Admin → a designer's card → Project manager → choose a PM | That PM can now manage the designer | Auto + Manual | P2 |
+| A19 | Designer adds a client and edits another client in detail; tries to delete one | Add and edit work; no Delete | Auto + Manual | P1 |
 | A9 | Designer opens `/admin.html` | "Only the admin can use this page" | Auto | P1 |
 | A10 | Admin sets a new password for a designer | Old password stops working, new one works | Manual | P2 |
 | A11 | Leave a signed-in tab idle for 10+ hours | Asked to sign in again; no data lost | Manual | P3 |
@@ -223,3 +230,5 @@ Record every ✘ with a screenshot and the text in the corner of the screen, and
 | Q15 | Upload a .exe or .php | Refused with the file type named | Auto | P2 |
 | Q16 | Download a 1 GB file | Download shows its size and progress | Auto (size) + Manual | P2 |
 | Q17 | Phone width | Buttons wrap, rows stack, no sideways scroll | Manual | P3 |
+| Q18 | Upload a 400 MB file; when it says "✓ Uploaded", reload the folder at once and download the file | The file is listed and downloads at once (from our server while it is still on its way to Zoho); a minute later it is in WorkDrive | Auto + Manual | P1 |
+| Q19 | Admin health check after adding the cron job | "Background job" ✓, last ran a few minutes ago, 0 files waiting | Manual | P1 |
