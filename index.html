@@ -551,7 +551,7 @@ document.addEventListener('click',async e=>{
   else if(a==='renameBrand'){const n=prompt('Client name',b.name);if(n)b.name=n.trim();const d=prompt('Short note (optional)',b.notes||'');if(d!==null)b.notes=d}
   else if(a==='newBrand'){openNewBrand();return}
   else if(a==='lbg'){ui.lbg=id}
-  else if(a==='delBrand'){const sy=typeof LHsync!=='undefined'&&LHsync.on;if(sy&&LHsync.role!=='admin'){toast('Only the admin can delete a client',5000);return}
+  else if(a==='delBrand'){const sy=typeof LHsync!=='undefined'&&LHsync.on;if(sy&&!['admin','pm'].includes(LHsync.role)){toast('Only the admin and project managers can delete a client',5000);return}
     if(!confirm('Delete '+b.name+' and all its assets?'+(sy?'\n\nIts folder in Zoho is moved to the WorkDrive trash (it can be restored from there), and every designer will stop seeing this client.':'')))return;S.brands.forEach(y=>{if(y.parent===b.id)delete y.parent});S.brands=S.brands.filter(x=>x.id!==b.id);ui.brandId=S.brands[0]?.id}
   else if(a==='addColor'){const name=$('#cn').value.trim(),hex=normHex($('#ch').value||$('#cp').value);if(!name||!hex){toast('Enter a name and a valid HEX');return}b.colors.push({id:uid(),name,hex,role:$('#cr').value})}
   else if(a==='editColor'){const c=b.colors.find(x=>x.id===id),n=prompt('Name',c.name);if(n)c.name=n;const h=prompt('HEX',c.hex);if(h&&normHex(h))c.hex=normHex(h)}

@@ -13,7 +13,7 @@ declare(strict_types=1);
 */
 require __DIR__ . '/_lib.php';
 require_method('GET');
-require_admin();
+$viewer = require_can('dashboard');
 session_write_close();
 $x = db();
 $days = max(1, min(400, (int)($_GET['days'] ?? 30)));

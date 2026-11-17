@@ -1,6 +1,6 @@
 # LatchHub – Zoho WorkDrive + Hostinger setup
 
-What this does: the website talks to small PHP files in `api/`. They sign people in (1 admin + 10 designers), compress uploads, and store/fetch files in your WorkDrive folder. The Zoho keys live in one private file on the server – never in GitHub or in the website.
+What this does: the website talks to small PHP files in `api/`. They sign people in (the admin plus ten designers and project managers), compress uploads, and store/fetch files in your WorkDrive folder. The Zoho keys live in one private file on the server – never in GitHub or in the website.
 
 ## 1. Database (hPanel → Databases → MySQL Databases)
 Create a database and a user (any names). Note the **database name, user and password**.
@@ -48,6 +48,18 @@ Files that exist only on the server are left alone (nothing is deleted), and `lh
 
 ## 4. First admin
 Open `https://YOUR-DOMAIN/api/setup.php?token=YOUR_SETUP_TOKEN`, create the admin account. Then set `'setup_token' => ''` in `lh-config.php` to switch the page off.
+
+## Roles: who may do what
+| | Designer | Project manager (PM) | Admin |
+|---|---|---|---|
+| Clients: open, add, edit, upload logos, fonts, files | ✓ | ✓ | ✓ |
+| Files: upload, new folder, rename, delete files | ✓ | ✓ | ✓ |
+| Delete a client (its Zoho folder goes to the WorkDrive trash) | – | ✓ | ✓ |
+| Delete folders in Files | – | ✓ | ✓ |
+| Dashboard: Overview, Activity log, Clients (read only; no IP addresses) | – | ✓ | ✓ |
+| Team (add people, roles, passwords, switch off), Zoho & system, backups, restore deleted clients | – | – | ✓ |
+
+The admin adds a person with a role (Admin → Team → Add a person) and can change anyone's role later (**Change role** on their card). Designers and project managers share ten places. The permissions live in one list (`LH_PERMS` in `api/_lib.php`), so a change is one line.
 
 ## 5. Check Zoho
 Open `https://YOUR-DOMAIN/admin.html`, sign in, press **Run health check**. Every required line should be ✓. Then add your designers under **Team → Add a person**.

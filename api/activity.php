@@ -31,7 +31,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
   out(200, ['ok' => true]);
 }
 require_method('GET');
-require_admin();
+$viewer = require_can('dashboard');
 $allActs = array_column($x->query('SELECT DISTINCT action FROM lh_activity ORDER BY action')->fetchAll(), 'action');
 if (!empty($_GET['actions'])) out(200, ['actions' => $allActs, 'cats' => array_map(fn($a) => act_cat($a), array_combine($allActs, $allActs) ?: []), 'labels' => LH_CATS]);
 if (!empty($_GET['summary'])) {
@@ -66,7 +66,7 @@ $limit = $csv ? 5000 : max(1, min(200, (int)($_GET['limit'] ?? 100)));
 $st = $x->prepare('SELECT id,at,user_id,user_name,role,action,client_id,client_name,details,ip FROM lh_activity' . ($w ? ' WHERE ' . implode(' AND ', $w) : '') . ' ORDER BY id DESC LIMIT ' . $limit);
 $st->execute($p);
 $rows = $st->fetchAll();
-foreach ($rows as &$r) $r['cat'] = act_cat((string)$r['action']);
+foreach ($rows as &$r) { $r['cat'] = act_cat((string)$r['action']); if ($viewer['role'] !== 'admin') $r['ip'] = ''; }   /* IP addresses are for the admin only */
 unset($r);
 if ($csv) {
   header('Content-Type: text/csv; charset=utf-8');

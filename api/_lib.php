@@ -119,6 +119,19 @@ function require_login(bool $write = false): array {
   if ($write) check_csrf();
   return $u;
 }
+/* ---------- roles: who may do what (change a permission here, in one place) ---------- */
+const LH_ROLES = ['admin' => 'Admin', 'pm' => 'Project manager', 'designer' => 'Designer'];
+const LH_PERMS = [
+  'delete_client' => ['admin', 'pm'],   /* delete a client (its Zoho folder goes to the WorkDrive trash; the admin can restore it) */
+  'delete_folder' => ['admin', 'pm'],   /* delete folders in the Files section */
+  'dashboard'     => ['admin', 'pm'],   /* admin page: Overview, Activity log, Clients (read only) */
+];
+function can(?array $u, string $what): bool { return $u !== null && in_array((string)$u['role'], LH_PERMS[$what] ?? ['admin'], true); }
+function require_can(string $what, bool $write = false): array {
+  $u = require_login($write);
+  if (!can($u, $what)) out(403, ['error' => 'Your role cannot do this.']);
+  return $u;
+}
 function require_admin(bool $write = false): array {
   $u = require_login($write);
   if ($u['role'] !== 'admin') out(403, ['error' => 'Admins only.']);

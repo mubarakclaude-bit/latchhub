@@ -308,6 +308,35 @@ ok "  … a file outside this folder is never touched" 0 "$(MOCKTRASHED SECRETFI
 DJ(){ curl -s -o "$T/last" -w '%{http_code}' -b "$T/cj3" -H "X-LH-CSRF: $(curl -s -b "$T/cj3" "$B/api/me.php" | jget csrf)" -X POST -H 'Content-Type: application/json' -d "$1" "$B/api/fm.php"; }
 DJ "{\"action\":\"trash\",\"client\":\"fmcli01\",\"name\":\"FM Client\",\"ids\":[\"$CAMP\"]}" > /dev/null
 ok "a designer cannot delete a folder" 0 "$(MOCKTRASHED "$CAMP")"
+echo "project managers (PM)"
+ok "admin makes a designer a project manager" 200 "$(FMJ '{"action":"mkdir","client":"fmcli01","name":"FM Client","folder_name":"PM test"}' >/dev/null; code "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"action":"role","id":5,"role":"pm"}' "$B/api/users.php")"
+PMF=$(FMG | python3 -c 'import sys,json;print([i["id"] for i in json.load(sys.stdin)["items"] if i["name"]=="PM test"][0])')
+curl -s -b "$T/cjpm" -c "$T/cjpm" -X POST -H 'Content-Type: application/json' -d '{"email":"d4@x.com","password":"designer-pass-4"}' "$B/api/login.php" > "$T/last"
+ok "  … they sign in as a project manager" pm "$(jget user.role < "$T/last")"
+PMCS=$(jget csrf < "$T/last")
+PMJ(){ curl -s -o "$T/last" -w '%{http_code}' -b "$T/cjpm" -H "X-LH-CSRF: $PMCS" -X POST -H 'Content-Type: application/json' -d "$1" "$B/api/$2"; }
+PMJ "{\"action\":\"trash\",\"client\":\"fmcli01\",\"name\":\"FM Client\",\"ids\":[\"$PMF\"]}" fm.php > /dev/null
+ok "  … a project manager can delete a folder" 1 "$(MOCKTRASHED "$PMF")"
+ok "  … the app shows them the Dashboard link" 1 "$(curl -s -b "$T/cjpm" "$B/" | grep -c '>Dashboard</a>')"
+ok "  … they see the dashboard numbers" 200 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cjpm" "$B/api/stats.php?days=30")"
+ok "  … and the activity log" 200 "$(curl -s -o "$T/last" -w '%{http_code}' -b "$T/cjpm" "$B/api/activity.php?limit=50")"
+ok "  … without anyone's IP address" 0 "$(python3 -c "import json;print(sum(1 for e in json.load(open('$T/last'))['events'] if e['ip']))")"
+ok "  … the admin still sees IP addresses" 1 "$(curl -s -b "$J" "$B/api/activity.php?limit=50" | python3 -c 'import sys,json;print(1 if any(e["ip"] for e in json.load(sys.stdin)["events"]) else 0)')"
+ok "  … they cannot see the team list" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cjpm" "$B/api/users.php")"
+ok "  … or add people" 403 "$(PMJ '{"action":"create","name":"X","email":"x9@x.com","role":"designer","password":"long-enough-pass"}' users.php)"
+ok "  … or change anyone's role" 403 "$(PMJ '{"action":"role","id":6,"role":"pm"}' users.php)"
+ok "  … or run the Zoho checks" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cjpm" "$B/api/health.php")"
+ok "  … or the upload test" 403 "$(PMJ '{}' selftest.php)"
+ok "  … or the background job" 403 "$(PMJ '{}' cron.php)"
+ok "  … or the clean-up queue" 403 "$(curl -s -o /dev/null -w '%{http_code}' -b "$T/cjpm" "$B/api/brands.php?pending=1")"
+ok "  … or restore deleted clients" 403 "$(PMJ '{"action":"restore","id":"zzz"}' brands.php)"
+PMJ '{"action":"save","base_version":0,"brand":{"id":"pmbrand1","name":"PM Client","colors":[]}}' brands.php > /dev/null
+ok "  … a project manager can delete a client" 200 "$(PMJ '{"action":"delete","id":"pmbrand1"}' brands.php)"
+ok "  … the admin can restore it" True "$(curl -s -b "$J" "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"action":"restore","id":"pmbrand1"}' "$B/api/brands.php" | jget ok)"
+ok "the role change is in the log" 1 "$(curl -s -b "$J" "$B/api/activity.php?action=user_role_changed" | grep -c 'designer → project manager')"
+ok "the admin cannot change their own role" 400 "$(code "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"action":"role","id":1,"role":"designer"}' "$B/api/users.php")"
+ok "an unknown role is refused" 400 "$(code "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"action":"role","id":6,"role":"boss"}' "$B/api/users.php")"
+ok "project managers share the ten places with designers" 400 "$(code "${H[@]}" -X POST -H 'Content-Type: application/json' -d '{"action":"create","name":"PM2","email":"pm2@x.com","role":"pm","password":"pm-pass-12345"}' "$B/api/users.php")"
 ok "a designer can upload and browse" Campaigns "$(curl -s -b "$T/cj3" "$B/api/fm.php?client=fmcli01&name=FM%20Client" | python3 -c 'import sys,json;print([i["name"] for i in json.load(sys.stdin)["items"] if i["folder"]][0])')"
 FMJ "{\"action\":\"trash\",\"client\":\"fmcli01\",\"name\":\"FM Client\",\"ids\":[\"$CAMP\"]}" > /dev/null
 ok "the admin can delete a folder" 1 "$(MOCKTRASHED "$CAMP")"

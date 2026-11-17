@@ -1,6 +1,6 @@
 # LatchHub – test scenarios
 
-How to use: go down the list on the **live site**, mark ✔ / ✘ and note anything odd. **Auto** = already checked by the 267 automatic tests on every push (against a fake Zoho, not your real one), so on the live site you only need a quick confirmation. **Manual** = needs a person.
+How to use: go down the list on the **live site**, mark ✔ / ✘ and note anything odd. **Auto** = already checked by the 289 automatic tests on every push (against a fake Zoho, not your real one), so on the live site you only need a quick confirmation. **Manual** = needs a person.
 Use **two browsers** (or one normal + one private window) and, if possible, two computers: one for the admin, one for a designer.
 
 Priority: **P1** = must pass before the team relies on it · **P2** = should pass · **P3** = nice to know.
@@ -17,7 +17,11 @@ Priority: **P1** = must pass before the team relies on it · **P2** = should pas
 | A5 | Sign out, press the browser Back button | Still signed out; no client data shown | Manual | P1 |
 | A6 | Admin adds a designer; designer signs in | Designer sees all clients, no Admin link | Manual | P1 |
 | A7 | Admin switches a designer off while they are working | Their next save/upload is refused; they cannot sign in again | Manual | P1 |
-| A8 | Add an 11th designer (limit is 1 admin + 10 designers) | Refused with a clear message | Auto | P2 |
+| A8 | Add an 11th designer or project manager (limit: the admin plus ten designers and project managers) | Refused with a clear message | Auto | P2 |
+| A13 | Admin adds a project manager (or changes a designer's role) | Card shows "Project manager"; the change is in the log | Auto + Manual | P1 |
+| A14 | Project manager signs in | Top right shows **Dashboard**; it opens Overview, Activity and Clients only (no Team, no Zoho & system); no IP addresses | Auto + Manual | P1 |
+| A15 | Project manager deletes a client, and a folder in Files | Both work; a designer is refused for both | Auto | P1 |
+| A16 | Project manager tries Team, health check, upload test, restore | Refused | Auto | P1 |
 | A9 | Designer opens `/admin.html` | "Only the admin can use this page" | Auto | P1 |
 | A10 | Admin sets a new password for a designer | Old password stops working, new one works | Manual | P2 |
 | A11 | Leave a signed-in tab idle for 10+ hours | Asked to sign in again; no data lost | Manual | P3 |

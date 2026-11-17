@@ -5,7 +5,7 @@ declare(strict_types=1);
  GET                                   -> { brands: [ {id, version, brand} ] }
  POST {action:"save", brand, base_version}   create (base_version 0) or update; refuses (409) if someone saved a newer version first
  GET ?deleted=1                        admin: deleted clients that can still be restored
- POST {action:"delete", id}                  admin only; the client's Zoho folder moves to the WorkDrive trash (recoverable)
+ POST {action:"delete", id}                  admin and project managers; the client's Zoho folder moves to the WorkDrive trash (recoverable)
  POST {action:"restore", id}                 admin only; brings a deleted client and its Zoho folder back
  A save also moves to the trash any Zoho file that the record no longer links to (a removed logo, element, font or replaced brand book).
 */
@@ -59,7 +59,7 @@ if ($act === 'restore') {
   out(200, ['ok' => true]);
 }
 if ($act === 'delete') {
-  require_admin(true);
+  require_can('delete_client', true);
   $id = (string)($b['id'] ?? '');
   if (!valid_client_key($id)) out(400, ['error' => 'Invalid brand id.']);
   $old = $x->prepare('SELECT json FROM lh_brands WHERE id=?');
