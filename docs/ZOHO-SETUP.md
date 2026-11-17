@@ -52,14 +52,17 @@ Open `https://YOUR-DOMAIN/api/setup.php?token=YOUR_SETUP_TOKEN`, create the admi
 ## Roles: who may do what
 | | Designer | Project manager (PM) | Admin |
 |---|---|---|---|
-| Clients: open, add, edit, upload logos, fonts, files | ✓ | ✓ | ✓ |
-| Files: upload, new folder, rename, delete files | ✓ | ✓ | ✓ |
-| Delete a client (its Zoho folder goes to the WorkDrive trash) | – | ✓ | ✓ |
-| Delete folders in Files | – | ✓ | ✓ |
-| Dashboard: Overview, Activity log, Clients (read only; no IP addresses) | – | ✓ | ✓ |
-| Team (add people, roles, passwords, switch off), Zoho & system, backups, restore deleted clients | – | – | ✓ |
+| Add clients; edit every client in detail; upload and manage files | ✓ | ✓ | ✓ |
+| Delete a client, and folders in its Files | – | only clients the PM added | every client |
+| Add designers | – | ✓ (they join the PM's team) | ✓ (any role) |
+| Rename, new password, switch off/on | – | the designers in their team | everyone |
+| Dashboard (Overview, Activity, Team, Clients) | – | all designers' activity and their own; no IP addresses | everyone |
+| Roles, moving a designer to another PM, Zoho & system, backups, restoring deleted clients | – | – | ✓ |
 
-The admin adds a person with a role (Admin → Team → Add a person) and can change anyone's role later (**Change role** on their card). Designers and project managers share ten places. The permissions live in one list (`LH_PERMS` in `api/_lib.php`), so a change is one line.
+- Each client remembers who added it. Clients that existed before roles were introduced get their creator from the activity log; where that is unknown, only the admin can delete them.
+- Admin → Team: **Change role** on any card; **Project manager** on a designer's card puts them in a PM's team (or none). Changing a PM to another role takes their designers out of the team.
+- Designers and project managers share ten places (plus the admin).
+- All rules are in one place: `api/_lib.php`, "roles".
 
 ## 5. Check Zoho
 Open `https://YOUR-DOMAIN/admin.html`, sign in, press **Run health check**. Every required line should be ✓. Then add your designers under **Team → Add a person**.

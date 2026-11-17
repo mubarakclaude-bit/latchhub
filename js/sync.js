@@ -4,11 +4,13 @@
    - changes made by other designers are picked up every minute and when you return to the tab.
    Without the server (opened locally) none of this runs and the app behaves as before. */
 const LHsync={
-  on:false,csrf:'',role:'',ver:{},hash:{},busy:false,again:false,timer:null,
+  on:false,csrf:'',role:'',uid:0,owner:{},
+  /* the admin deletes any client; a project manager the clients they added (a client not saved yet is theirs) */
+  canDelete(id){if(!this.on)return true;if(this.role==='admin')return true;if(this.role!=='pm')return false;const o=this.owner[id];return o===undefined||o===this.uid},ver:{},hash:{},busy:false,again:false,timer:null,
   init(){
     const bar=document.getElementById('lh-user');
     if((typeof DEMO!=='undefined'&&DEMO)||!bar)return false;
-    this.csrf=bar.dataset.csrf||'';this.role=bar.dataset.role||'designer';this.on=true;
+    this.csrf=bar.dataset.csrf||'';this.role=bar.dataset.role||'designer';this.uid=+(bar.dataset.uid||0);this.on=true;
     document.addEventListener('visibilitychange',()=>{if(!document.hidden){this.refresh();if(this.failed)this.flush()}});
     setInterval(()=>this.refresh(),60000);
     return true},
@@ -26,7 +28,7 @@ const LHsync={
     if(!srv.length)return false;
     const ids=new Set(srv.map(x=>x.id)),local=(S.brands||[]).filter(b=>b.user&&!ids.has(b.id));   /* brands made in this browser before the server existed are kept and pushed */
     S.brands=srv.map(x=>x.brand).concat(local);
-    this.ver={};this.hash={};srv.forEach(x=>{this.ver[x.id]=x.version;this.hash[x.id]=this.h(x.brand)});
+    this.ver={};this.hash={};this.owner={};srv.forEach(x=>{this.ver[x.id]=x.version;this.hash[x.id]=this.h(x.brand);this.owner[x.id]=x.created_by||0});
     if(local.length)setTimeout(()=>this.flush(),800);
     return true},
   onSave(){clearTimeout(this.timer);this.timer=setTimeout(()=>this.flush(),700)},
@@ -127,7 +129,7 @@ const LHsync={
           if(dirty&&!force)continue;
           S.brands[i]=x.brand;changed=true}
         else continue;
-        this.ver[x.id]=x.version;this.hash[x.id]=this.h(x.brand)}
+        this.ver[x.id]=x.version;this.hash[x.id]=this.h(x.brand);(this.owner=this.owner||{})[x.id]=x.created_by||0}
       for(const id of Object.keys(this.ver)){
         if(ids.has(id))continue;
         const i=S.brands.findIndex(b=>b.id===id);

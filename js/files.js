@@ -60,7 +60,7 @@ const FILES={
     const crumbs=[{id:'',name:s.client?s.client.name:'Client'}].concat(s.trail);
     const bc=`<div class="fm-bc">${crumbs.map((c,i)=>i===crumbs.length-1?`<b>${E(c.name)}</b>`:`<button data-f="open" data-id="${E(c.id)}">${E(c.name)}</button><span>›</span>`).join('')}${s.loading?'<span class="muted fm-ld">Loading…</span>':''}</div>`;
     if(s.error){box.innerHTML=bc+`<div class="none">Could not open this folder: ${E(s.error)} <button class="btn sm" data-f="refresh">Try again</button></div>`;return}
-    const linked=new Set(s.linked),isAdmin=['admin','pm'].includes(LHsync.role);   /* folders: admin and project managers */
+    const linked=new Set(s.linked),isAdmin=LHsync.canDelete(s.client.id);   /* folders: the admin, or the project manager who added this client */
     const rows=s.items.map(it=>{
       const ext=this.extOf(it),link=linked.has(it.id),dl=it.pending?(it.dl||''):'api/download.php?id='+encodeURIComponent(it.id);
       const ico=it.folder?'<span class="fm-ico dir"></span>':(!it.pending&&this.IMG.test(ext)&&it.size!=null&&it.size<6e6?`<img class="fm-th" loading="lazy" src="${dl}" alt="" onerror="this.outerHTML='<span class=&quot;fm-ico&quot;>${E(ext.toUpperCase())}</span>'">`:`<span class="fm-ico">${E((ext||'file').slice(0,4).toUpperCase())}</span>`);

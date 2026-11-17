@@ -34,7 +34,9 @@ require_method('GET');
 $viewer = require_can('dashboard');
 $allActs = array_column($x->query('SELECT DISTINCT action FROM lh_activity ORDER BY action')->fetchAll(), 'action');
 if (!empty($_GET['actions'])) out(200, ['actions' => $allActs, 'cats' => array_map(fn($a) => act_cat($a), array_combine($allActs, $allActs) ?: []), 'labels' => LH_CATS]);
+$scope = activity_scope($viewer);
 if (!empty($_GET['summary'])) {
+  if ($scope !== null) out(403, ['error' => 'Admins only.']);
   $st = $x->prepare('SELECT user_id, action FROM lh_activity WHERE at >= ? AND user_id > 0');
   $st->execute([gmdate('Y-m-d H:i:s', time() - 30 * 86400)]);
   $out = [];
@@ -50,6 +52,7 @@ if (!empty($_GET['summary'])) {
   out(200, ['summary' => $out]);
 }
 $w = []; $p = [];
+if ($scope !== null) { $w[] = 'user_id IN (' . implode(',', $scope) . ')'; }   /* integers only */
 if (!empty($_GET['user'])) { $w[] = 'user_id=?'; $p[] = (int)$_GET['user']; }
 if (!empty($_GET['action'])) { $w[] = 'action=?'; $p[] = (string)$_GET['action']; }
 if (!empty($_GET['client'])) { $w[] = '(client_name LIKE ? OR client_id=?)'; $p[] = '%' . str_replace(['%', '_'], ['\\%', '\\_'], (string)$_GET['client']) . '%'; $p[] = (string)$_GET['client']; }

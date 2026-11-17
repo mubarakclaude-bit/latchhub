@@ -79,7 +79,7 @@ if ($act === 'trash') {
     $it = fm_item_in($folder, $id);
     if (!$it) { $refused[] = ['id' => $id, 'why' => 'no longer in this folder']; continue; }
     if (isset($linked[$id])) { $refused[] = ['id' => $id, 'name' => $it['name'], 'why' => 'used on the brand page – remove it there']; continue; }
-    if ($it['folder'] && !can($user, 'delete_folder')) { $refused[] = ['id' => $id, 'name' => $it['name'], 'why' => 'only the admin and project managers can delete folders']; continue; }
+    if ($it['folder'] && !can_delete_in_client($user, $key)) { $refused[] = ['id' => $id, 'name' => $it['name'], 'why' => 'only the admin, or the project manager who added this client, can delete folders']; continue; }
     if ($it['folder'] && !$trail && in_array(strtolower($it['name']), ['brand assets', 'brand book'], true)) { $refused[] = ['id' => $id, 'name' => $it['name'], 'why' => 'the brand page keeps its files here']; continue; }
     [$ok, $code, $raw] = zoho_trash($id);
     if (!$ok) { $refused[] = ['id' => $id, 'name' => $it['name'], 'why' => 'Zoho refused (HTTP ' . $code . ')']; continue; }

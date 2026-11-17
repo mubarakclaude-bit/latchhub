@@ -53,7 +53,7 @@ function pdo_connect(): PDO {
   return new PDO($d['dsn'] ?? ('mysql:host=' . $d['host'] . ';dbname=' . $d['name'] . ';charset=utf8mb4'), $d['user'] ?? null, $d['pass'] ?? null,
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
 }
-const LH_SCHEMA = 9;   /* bump when a table is added: installs created earlier are upgraded automatically on the next request */
+const LH_SCHEMA = 10;   /* bump when a table is added: installs created earlier are upgraded automatically on the next request */
 function ensure_schema_once(PDO $x): void {
   try { $r = $x->query("SELECT v FROM lh_kv WHERE k='schema'")->fetch(); if ($r && (int)$r['v'] >= LH_SCHEMA) return; } catch (Throwable $e) { /* lh_kv itself may be missing */ }
   ensure_schema($x);
@@ -86,6 +86,14 @@ function ensure_schema(?PDO $x = null): void {
   $x->exec("CREATE TABLE IF NOT EXISTS lh_pending (id $pk, zoho_id VARCHAR(80) NOT NULL, kind VARCHAR(12) NOT NULL, reason VARCHAR(255) NOT NULL, tries INT NOT NULL DEFAULT 0, created_at DATETIME NOT NULL)$tail");
   $x->exec("CREATE TABLE IF NOT EXISTS lh_uploads (token VARCHAR(40) PRIMARY KEY, user_id INT NOT NULL, client_key VARCHAR(40) NOT NULL, client_name VARCHAR(190) NOT NULL DEFAULT '', folder_id VARCHAR(80) NOT NULL, rel_path VARCHAR(500) NOT NULL DEFAULT '', name VARCHAR(255) NOT NULL, size BIGINT NOT NULL, last_mod BIGINT NOT NULL DEFAULT 0, mode VARCHAR(8) NOT NULL, piece INT NOT NULL, chunk_size BIGINT NOT NULL DEFAULT 0, zoho_sent BIGINT NOT NULL DEFAULT 0, zoho_upload_id VARCHAR(190) NOT NULL DEFAULT '', state VARCHAR(10) NOT NULL DEFAULT 'open', file_id VARCHAR(80) NOT NULL DEFAULT '', error VARCHAR(300) NOT NULL DEFAULT '', created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL" . $ix('user_id') . ")$tail");
   try { $x->exec('ALTER TABLE lh_uploads ADD COLUMN attempts INT NOT NULL DEFAULT 0'); } catch (Throwable $e) { /* already there */ }
+  /* roles: who added a client (a project manager may delete their own clients) and which project manager a designer belongs to */
+  try { $x->exec('ALTER TABLE lh_users ADD COLUMN manager_id INT NOT NULL DEFAULT 0'); } catch (Throwable $e) { /* already there */ }
+  try { $x->exec('ALTER TABLE lh_deleted ADD COLUMN created_by INT NOT NULL DEFAULT 0'); } catch (Throwable $e) { /* already there */ }
+  try {
+    $x->exec('ALTER TABLE lh_brands ADD COLUMN created_by INT NOT NULL DEFAULT 0');
+    /* clients that existed before: their creator is in the activity log ("client created") */
+    $x->exec("UPDATE lh_brands SET created_by = COALESCE((SELECT a.user_id FROM lh_activity a WHERE a.id = (SELECT MIN(b.id) FROM lh_activity b WHERE b.action='client_created' AND b.client_id=lh_brands.id)), 0) WHERE created_by = 0");
+  } catch (Throwable $e) { /* already there */ }
   $x->exec("CREATE TABLE IF NOT EXISTS lh_files (id $pk, zoho_id VARCHAR(80) NOT NULL, client_key VARCHAR(40) NOT NULL, name VARCHAR(255) NOT NULL, bytes BIGINT NOT NULL, orig_bytes BIGINT NOT NULL, method VARCHAR(40) NOT NULL, user_id INT NOT NULL, created_at DATETIME NOT NULL" . $ix('client_key') . ")$tail");
 }
 
@@ -119,13 +127,38 @@ function require_login(bool $write = false): array {
   if ($write) check_csrf();
   return $u;
 }
-/* ---------- roles: who may do what (change a permission here, in one place) ---------- */
+/* ---------- roles: who may do what (all rules are here, in one place) ----------
+   Admin            everything.
+   Project manager  everything a designer can; deletes the clients they added (and folders inside them);
+                    adds designers, who then belong to them, and renames them, sets their passwords, switches them off/on;
+                    sees the dashboard with the activity of all designers and their own.
+   Designer         adds clients and edits every client in detail; uploads and manages files. */
 const LH_ROLES = ['admin' => 'Admin', 'pm' => 'Project manager', 'designer' => 'Designer'];
 const LH_PERMS = [
-  'delete_client' => ['admin', 'pm'],   /* delete a client (its Zoho folder goes to the WorkDrive trash; the admin can restore it) */
-  'delete_folder' => ['admin', 'pm'],   /* delete folders in the Files section */
-  'dashboard'     => ['admin', 'pm'],   /* admin page: Overview, Activity log, Clients (read only) */
+  'dashboard' => ['admin', 'pm'],   /* the dashboard page (a project manager sees designers' activity and their own) */
+  'team'      => ['admin', 'pm'],   /* add people (a project manager adds designers only) */
 ];
+/* who added a client (0 = before roles existed, or unknown: only the admin may delete it) */
+function client_owner(string $key): int {
+  try { $q = db()->prepare('SELECT created_by FROM lh_brands WHERE id=?'); $q->execute([$key]); $r = $q->fetch(); return $r ? (int)$r['created_by'] : 0; } catch (Throwable $e) { return 0; }
+}
+/* delete a client, or a folder inside a client's Files: the admin always, a project manager for the clients they added */
+function can_delete_in_client(array $u, string $key): bool {
+  if ($u['role'] === 'admin') return true;
+  return $u['role'] === 'pm' && client_owner($key) === (int)$u['id'];
+}
+/* may $u rename, set the password of, or switch off $target? */
+function manages(array $u, array $target): bool {
+  if ($u['role'] === 'admin') return true;
+  return $u['role'] === 'pm' && ($target['role'] ?? '') === 'designer' && (int)($target['manager_id'] ?? 0) === (int)$u['id'];
+}
+/* whose activity $u may see: null = everyone (admin); otherwise the user ids (a project manager: every designer and themselves) */
+function activity_scope(array $u): ?array {
+  if ($u['role'] === 'admin') return null;
+  $ids = array_map('intval', array_column(db()->query("SELECT id FROM lh_users WHERE role='designer'")->fetchAll(), 'id'));
+  $ids[] = (int)$u['id'];
+  return array_values(array_unique($ids));
+}
 function can(?array $u, string $what): bool { return $u !== null && in_array((string)$u['role'], LH_PERMS[$what] ?? ['admin'], true); }
 function require_can(string $what, bool $write = false): array {
   $u = require_login($write);
